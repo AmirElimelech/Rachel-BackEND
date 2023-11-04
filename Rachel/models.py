@@ -5,7 +5,8 @@ from django.contrib.auth.models import User, Group
 from django.core.validators import RegexValidator, FileExtensionValidator
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
-from datetime import date
+from datetime import date , timedelta
+from django.utils import timezone
 
 
 
@@ -189,6 +190,14 @@ class FailedLoginAttempt(models.Model):
     username = models.CharField(max_length=150, unique=True)
     attempts = models.IntegerField(default=0)
     last_attempt_time = models.DateTimeField(auto_now=True)
+    lockout_until = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Failed attempts for {self.username}: {self.attempts}"
+
+    def is_locked_out(self):
+        return self.lockout_until and timezone.now() < self.lockout_until
+
+    def lock_out(self):
+        self.lockout_until = timezone.now() + timedelta(minutes=5)
+        self.save()

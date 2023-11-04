@@ -4,8 +4,14 @@ from django.core.mail import send_mail
 from .models import User, Shelters, Profile , SupportProvider , UserActivity
 import datetime
 from django.contrib.auth.signals import user_logged_in , user_login_failed
-
+from .DAL import DAL
 from .utils import alert_for_suspicious_activity
+
+
+
+dal = DAL()
+
+
 
 
 
@@ -14,16 +20,12 @@ def create_shelter_signal(sender, instance, created, **kwargs):
     if created:
         try:
             # Check if the user is associated with a profile and is a support provider
-            support_provider_profile = instance.profile.supportprovider
-            if support_provider_profile.category.name == "Shelter":
+            support_provider_profile = dal.get_related(instance, 'profile__supportprovider')
+            if support_provider_profile and support_provider_profile.category.name == "Shelter":
                 # Check if a Shelter with this provider does not exist
-                if not Shelters.objects.filter(support_provider=support_provider_profile).exists():
+                if not dal.filter(Shelters, support_provider=support_provider_profile):
                     # Create a new Shelter instance
-                    new_shelter = Shelters.objects.create(
-                        name=f"Shelter by {instance.username}",
-                        support_provider=support_provider_profile,
-                        # Set other necessary fields with default values or leave them to be set later
-                    )
+                    new_shelter = dal.create(Shelters, name=f"Shelter by {instance.username}", support_provider=support_provider_profile)
                     # Notify administrators of the new shelter
                     send_mail(
                         'New Shelter Registration',
@@ -78,11 +80,8 @@ def annual_inspection_reminder(sender, instance, **kwargs):
 
 @receiver(user_logged_in)
 def track_user_login(sender, request, user, **kwargs):
-    UserActivity.objects.create(
-        user=user,
-        activity_type='login',
-        ip_address=request.META.get('REMOTE_ADDR', '')  
-    )
+    dal.create(UserActivity, user=user, activity_type='login', ip_address=request.META.get('REMOTE_ADDR', ''))
+
 
 
 
