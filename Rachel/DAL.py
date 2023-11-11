@@ -2,7 +2,8 @@ import logging
 from django.core.exceptions import ObjectDoesNotExist
 from typing import Type, Optional, Tuple, List, Any
 from django.db.models import Model, QuerySet
-
+from datetime import timedelta
+from django.utils import timezone
 
 
 logger = logging.getLogger(__name__)
@@ -161,3 +162,20 @@ class DAL:
         except Exception as e:
             logger.error(f"filter - Error: {str(e)}")
             return model.objects.none()  # Return an empty QuerySet
+        
+
+    def is_locked_out(self, instance) -> bool:
+        """
+        Check if a user is locked out.
+        :param instance: The FailedLoginAttempt instance.
+        :return: True if locked out, False otherwise.
+        """
+        return instance.lockout_until and timezone.now() < instance.lockout_until
+
+    def lock_out(self, instance) -> None:
+        """
+        Lock out a user for a specified period.
+        :param instance: The FailedLoginAttempt instance to lock out.
+        """
+        instance.lockout_until = timezone.now() + timedelta(minutes=5)
+        self.update(instance)
