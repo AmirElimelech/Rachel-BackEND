@@ -327,12 +327,8 @@ class Shelters(TimestampedModel):
             errors['capacity'] = _("Capacity must be a positive number.")
 
         # Geolocation validation
-        if self.geolocation:
-            latitude, longitude = self.geolocation.y, self.geolocation.x
-            if not (-90 <= latitude <= 90):
-                errors['geolocation'] = _("Latitude must be between -90 and 90 degrees.")
-            if not (-180 <= longitude <= 180):
-                errors['geolocation'] += _(" Longitude must be between -180 and 180 degrees.")
+        if self.latitude is not None and self.longitude is not None:
+            latitude, longitude = self.latitude, self.longitude
 
         if self.city is None or self.country is None:
             errors['location'] = _("A shelter must be associated with a city and a country.")
