@@ -115,3 +115,8 @@ dmypy.json
 
 # generate key 
 generatekey.py
+
+
+# settings files
+settings.py
+settings - Copy.py
