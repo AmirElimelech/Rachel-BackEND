@@ -1,5 +1,5 @@
 import logging
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist , ValidationError
 from typing import Type, Optional, Tuple, List, Any
 from django.db.models import Model, QuerySet
 from datetime import timedelta
@@ -26,7 +26,7 @@ class DAL:
             logger.error(f"get_by_id - No {model.__name__} found with {field_name}={value}")
             return None
         except Exception as e:
-            logger.error(f"get_by_id - Error: {str(e)}")
+            logger.exception(f"get_by_id - Unexpected Error: {str(e)}")
             return None
             
 
@@ -34,12 +34,12 @@ class DAL:
 
     def get_all(self, model: Type[Model]) -> QuerySet:
         """
-        Retrieve all instances of a model.
-        :param model: The model class to retrieve instances from.
-        :return: QuerySet of model instances.
+        Retrieve all non-deleted instances of a model.
+        :param model: The model class to retrieve non-deleted instances from.
+        :return: QuerySet of non-deleted model instances.
         """
         try:
-            return model.objects.all()
+            return model.objects.filter(deleted_at__isnull=True)
         except Exception as e:
             logger.error(f"get_all - Error: {str(e)}")
             return model.objects.none()
@@ -102,15 +102,16 @@ class DAL:
 
     def delete(self, instance: Model) -> bool:
         """
-        Delete a model instance.
-        :param instance: The model instance to delete.
+        Soft delete a model instance with timestamp.
+        :param instance: The model instance to soft delete.
         :return: True if deletion was successful, False otherwise.
         """
         try:
-            instance.delete()
+            instance.deleted_at = timezone.now()
+            instance.save()
             return True
         except Exception as e:
-            logger.error(f"delete - Error: {str(e)}")
+            logger.error(f"soft_delete - Error: {str(e)}")
             return False
 
 
@@ -172,10 +173,15 @@ class DAL:
         """
         return instance.lockout_until and timezone.now() < instance.lockout_until
 
-    def lock_out(self, instance) -> None:
+    def lock_out(self, instance: Model) -> None:
         """
         Lock out a user for a specified period.
         :param instance: The FailedLoginAttempt instance to lock out.
         """
-        instance.lockout_until = timezone.now() + timedelta(minutes=5)
-        self.update(instance)
+        try:
+            instance.lockout_until = timezone.now() + timedelta(minutes=5)
+            instance.save()
+        except ValidationError as e:
+            logger.warning(f"lock_out - Validation error: {str(e)}")
+        except Exception as e:
+            logger.exception(f"lock_out - Unexpected error: {str(e)}")
