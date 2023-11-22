@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 
+
 def alert_for_suspicious_activity(username, request=None):
 
     """
@@ -36,14 +37,15 @@ def alert_for_suspicious_activity(username, request=None):
     This approach ensures that the counts of failed login attempts are accurate and current, reflecting the latest state immediately after a login failure, thereby offering a real-time insight into suspicious activities for security monitoring purposes.
     """
 
-
+    # Initialize the DAL instance
+    
 
     try:
         # Get the client IP address from the request
         ip_address = get_client_ip_address(request)
 
-        # Fetch all AccessAttempt instances for this IP address
-        attempts_from_ip = AccessAttempt.objects.filter(ip_address=ip_address)
+        # Fetch all AccessAttempt instances for this IP address using DAL
+        attempts_from_ip = dal.filter(AccessAttempt, ip_address=ip_address)
 
         total_failures = 0
         user_failure_updated = False
