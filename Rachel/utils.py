@@ -1,17 +1,13 @@
-from django.core.mail import send_mail
+import logging
 from .DAL import DAL
-from django.utils import timezone
-from datetime import timedelta
 from axes.models import AccessAttempt
-from django.db.models import Sum
-
-from axes.attempts import get_user_attempts
+from django.core.mail import send_mail
 from axes.helpers import get_client_ip_address
 
 
 
 
-import logging
+
 
 
 
@@ -23,6 +19,25 @@ logger = logging.getLogger(__name__)
 
 
 def alert_for_suspicious_activity(username, request=None):
+
+    """
+    The alert_for_suspicious_activity function is designed to log and alert on suspicious login activity based on failed login attempts. It operates as follows:
+
+    1. It first retrieves the client's IP address from the incoming request.
+
+    2. It then queries the AccessAttempt model to fetch all failed login attempt records associated with this IP address.
+
+    3. The function iterates over these records, logging the number of failed attempts for each user. For the user associated with the current failed attempt (identified by 'username'), the failure count is incremented by one to reflect the most recent failure. This increment is necessary because the logging occurs before the current attempt is committed to the database, and thus the fetched count is one less than the actual count after the failure.
+
+    4. In addition to logging individual user failures, the function also calculates the total number of failed login attempts from the specified IP address. This total includes the incremented counts, providing an up-to-date view of the overall failed attempts from that IP.
+
+    5. If the total number of failures exceeds a predefined threshold (SUSPICIOUS_ATTEMPT_THRESHOLD), an alert is triggered, notifying about the suspicious login activity. This alert includes sending an email and logging a warning message.
+
+    This approach ensures that the counts of failed login attempts are accurate and current, reflecting the latest state immediately after a login failure, thereby offering a real-time insight into suspicious activities for security monitoring purposes.
+    """
+
+
+
     try:
         # Get the client IP address from the request
         ip_address = get_client_ip_address(request)
