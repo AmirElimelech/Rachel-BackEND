@@ -412,31 +412,3 @@ class UserFeedback(TimestampedModel):
         return f"{self.user.username} - Feedback at {self.created_at}"
 
 
-
-
-#FailedLoginAttempt Model
-class FailedLoginAttempt(TimestampedModel):
-
-
-    """
-    Model tracking failed login attempts. It is used to implement security measures like
-    account lockouts after a certain number of failed attempts. It utilizes the AccessAttempt
-    model from the 'axes' package.
-    Fields:
-    - attempt: A link to the AccessAttempt model instance.
-    - lockout_until: The datetime until which the account is locked.
-    Methods:
-    - is_locked_out: Checks if the account is currently locked out.
-    - lock_out: Initiates a lockout for a set duration.
-    """
-
-
-    attempt = models.OneToOneField(AccessAttempt, on_delete=models.CASCADE)
-    lockout_until = models.DateTimeField(null=True, blank=True)
-
-    def is_locked_out(self):
-        return self.lockout_until and timezone.now() < self.lockout_until
-
-    def lock_out(self):
-        self.lockout_until = timezone.now() + timedelta(minutes=5)
-        self.save()
