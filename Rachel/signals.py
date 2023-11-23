@@ -6,8 +6,7 @@ from django.core.mail import send_mail
 from django.db.models.signals import post_save
 from django.contrib.auth import  get_user_model
 from .utils import alert_for_suspicious_activity
-from django.core.exceptions import ObjectDoesNotExist
-from .models import User, Shelters, SupportProvider, UserActivity
+from .models import User, Shelter, UserActivity , Profile , Group
 from django.contrib.auth.signals import user_logged_in, user_login_failed , user_logged_out
 
 
@@ -19,69 +18,75 @@ dal = DAL()
 
 
 
-@receiver(post_save, sender=User, dispatch_uid="create_shelter_signal")
+@receiver(post_save, sender=User)
 def create_shelter_signal(sender, instance, created, **kwargs):
     """
-    Create a shelter signal for new SupportProvider users who are categorized as "Shelter".
-
-    This method includes logging to track its execution, logging both the process of checking 
-    for the necessary conditions to create a shelter and the outcome of these checks. It helps 
-    in identifying and resolving issues related to shelter creation based on user profiles.
-
-    :param sender: The model class (User) sending the signal.
-    :param instance: The instance of the model just saved.
-    :param created: Boolean indicating if a new record was created.
-    :param kwargs: Additional keyword arguments.
+    Create a shelter for new support provider users categorized as 'Shelter and Housing'.
+    This function is triggered after a User instance is saved and checks if the user
+    has a related Profile marked as a support provider in the 'Shelter and Housing' category.
+    If so, and if a Shelter does not already exist for this profile, a new Shelter instance is created.
     """
     try:
         if created:
             logger.info(f"Checking for shelter creation conditions for user: {instance.username}")
 
-            # Check if the user has a profile
-            try:
-                user_profile = instance.profile
-            except ObjectDoesNotExist:
+            # Use DAL to get the related Profile instance
+            profile = dal.get_related(instance, 'profile')
+
+            if not profile:
                 logger.error(f"User {instance.username} does not have a profile associated")
                 return
 
-            # Check if the profile is associated with a SupportProvider
-            try:
-                support_provider_profile = user_profile.supportprovider
-            except ObjectDoesNotExist:
-                logger.error(f"Profile {user_profile} does not have a SupportProvider associated")
-                return
+            logger.info(f"Profile found for user: {instance.username}. Checking if user is a support provider.")
 
-            # Additional logging for category check
-            logger.info(f"Checking category for SupportProvider profile: {support_provider_profile}")
+            if profile.is_support_provider:
+                logger.info(f"Profile {profile} is marked as support provider. Checking for 'Shelter and Housing' category.")
 
-            if support_provider_profile.category.name == "Shelter":
-                # Check if a Shelter with this provider does not exist
-                if not dal.filter(Shelters, support_provider=support_provider_profile):
-                    logger.info(f"Creating new shelter for SupportProvider: {support_provider_profile}")
+                # Check if the profile is in the 'Shelter and Housing' category
+                if 'Shelter and Housing' in profile.support_provider_categories.values_list('name', flat=True):
+                    logger.info(f"Profile {profile} has 'Shelter and Housing' category.")
 
-                    # Create a new Shelter instance
-                    new_shelter = dal.create(Shelters, name=f"Shelter by {instance.username}", support_provider=support_provider_profile)
+                    # Check if a Shelter with this provider does not exist
+                    if not dal.filter(Shelter, support_provider=profile).exists():
+                        logger.info(f"No existing shelter found for {profile}. Creating new shelter.")
 
-                    # Notify administrators of the new shelter
-                    send_mail(
-                        'New Shelter Registration',
-                        f'A new shelter {new_shelter.name} has been created and needs review.',
-                        'Rachel.for.Israel@gmail.com',
-                        ['sapinhopreto@gmail.com'],
-                        fail_silently=False,
-                    )
+                        # Use DAL to create a new Shelter instance
+                        new_shelter = dal.create(
+                            Shelter,
+                            name=f"Shelter by {instance.username}",
+                            support_provider=profile
+                        )
 
-                    logger.info(f"New shelter created and notification sent for {new_shelter.name}")
+                        if new_shelter:
+                            logger.info(f"New shelter created: {new_shelter.name}. Sending notification to administrators.")
+                            admin_group = dal.get_by_field(Group, name='Administrator')
+                            if admin_group:
+                                admin_emails = [user.email for user in admin_group.user_set.all() if user.email]
 
+                                # Send email to all administrators
+                                send_mail(
+                                    'New Shelter Registration',
+                                    f'A new shelter {new_shelter.name} has been created and needs review.',
+                                    'Rachel.for.Israel@gmail.com',
+                                    admin_emails,
+                                    fail_silently=False,
+                                )
+
+                            logger.info(f"Notification sent for new shelter: {new_shelter.name}")
+                        else:
+                            logger.error(f"Failed to create a new shelter for {profile}")
+                    else:
+                        logger.info(f"Shelter already exists for {profile}")
+                else:
+                    logger.info(f"Profile {profile} does not have 'Shelter and Housing' category.")
+            else:
+                logger.info(f"Profile {profile} is not marked as a support provider.")
     except Exception as e:
-        # Log the exception and handle accordingly
         logger.error(f"Error in create_shelter_signal for user {instance.username}: {e}")
 
 
 
-
-
-@receiver(post_save, sender=SupportProvider)
+@receiver(post_save, sender=Profile)
 def account_activation_notification(sender, instance, **kwargs):
     """
     Send an account activation notification to support providers upon the activation of their account.
@@ -105,7 +110,7 @@ def account_activation_notification(sender, instance, **kwargs):
                 f'Your shelter account {instance.profile.user.username} has been activated.',
                 'Please login again , Thank you for generous support',
                 'Rachel.for.Israel@gmail.com',
-                [instance.profile.user.email],
+                [instance.user.email],
                 fail_silently=False,
             )
 
