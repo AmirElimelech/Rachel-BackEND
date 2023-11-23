@@ -286,22 +286,22 @@ class DAL:
 
 
 
-def get_by_field(self, model: Type[Model], **kwargs) -> Optional[Model]:
-    """
-    Retrieve an instance of a model by a specified field other than the ID.
+    def get_by_field(self, model: Type[Model], **kwargs) -> Optional[Model]:
+        """
+        Retrieve an instance of a model by a specified field other than the ID.
 
-    :param model: The model class to retrieve an instance from.
-    :param kwargs: Key-value pairs representing the field names and their values to filter by.
-    :return: An instance of the model or None if not found.
-    """
-    try:
-        logger.info(f"Starting get_by_field operation for {model.__name__} with criteria {kwargs}")
-        instance = model.objects.get(**kwargs)
-        logger.info(f"Successfully retrieved {model.__name__} with criteria {kwargs}")
-        return instance
-    except ObjectDoesNotExist:
-        logger.error(f"No {model.__name__} found with criteria {kwargs}")
-        return None
-    except Exception as e:
-        logger.exception(f"Unexpected error retrieving {model.__name__} with criteria {kwargs}: {str(e)}")
-        return None
+        :param model: The model class to retrieve an instance from.
+        :param kwargs: Key-value pairs representing the field names and their values to filter by.
+        :return: An instance of the model or None if not found.
+        """
+        try:
+            logger.info(f"Starting get_by_field operation for {model.__name__} with criteria {kwargs}")
+            instance = model.objects.get(**kwargs)
+            logger.info(f"Successfully retrieved {model.__name__} with criteria {kwargs}")
+            return instance
+        except ObjectDoesNotExist:
+            logger.error(f"No {model.__name__} found with criteria {kwargs}")
+            return None
+        except Exception as e:
+            logger.exception(f"Unexpected error retrieving {model.__name__} with criteria {kwargs}: {str(e)}")
+            return None
