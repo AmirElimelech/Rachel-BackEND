@@ -119,3 +119,8 @@ generatekey.py
 
 # settings files
 settings.py
+
+#migrations 
+
+/migrations/
+
