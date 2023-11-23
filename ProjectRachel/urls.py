@@ -22,5 +22,6 @@ from django.conf import settings
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('Rachel.urls')),
+    path('Facades/', include('Facades.urls')),
 ]
 
