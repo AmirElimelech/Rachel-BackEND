@@ -1,5 +1,5 @@
-from django.conf.urls import path
-# from.view import ... 
+from django.urls import path
+# # from.view import ... 
 
 
 
