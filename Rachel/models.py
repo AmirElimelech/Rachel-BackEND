@@ -1,6 +1,7 @@
 
 # Imports 
 
+import datetime
 from datetime import date 
 from django.db import  models
 from django_cryptography.fields import encrypt
@@ -547,6 +548,65 @@ class UserFeedback(TimestampedModel):
 
     def __str__(self):
         return f"{self.user.username} - Feedback at {self.created_at}"
+
+
+
+class FeedbackResponse(models.Model):
+    """
+    A model representing responses to user feedback. This model includes validations to ensure that:
+    - Only administrators can respond.
+    - Responses are not empty and adhere to a maximum length.
+    - Feedback being responded to exists and is not too old.
+    - Each piece of feedback receives only one response.
+    """
+    feedback = models.ForeignKey(UserFeedback, on_delete=models.CASCADE, related_name='responses')
+    responder = models.ForeignKey(User, on_delete=models.CASCADE)
+    response_text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Response to {self.feedback.user.username}'s feedback"
+
+    def clean(self):
+        """Perform validations on the FeedbackResponse model, aggregating all errors."""
+
+        errors = {}
+        min_length = 5
+
+        # Check if the responder is part of the 'Administrator' group
+        if not self.responder.groups.filter(name='Administrator').exists():
+            errors['responder'] = "Only administrators can respond to feedback."
+
+        # Validation for empty or too short response text
+        response_text_length = len(self.response_text.strip())
+        if response_text_length == 0:
+            errors['response_text'] = "Response text cannot be empty."
+        elif response_text_length < min_length:
+            errors['response_text'] = f"Response text must be at least {min_length} characters long."
+
+        # Validation for response text length
+        max_length = 1000  # Example: 1000 characters
+        if len(self.response_text) > max_length:
+            errors['response_text'] = f"Response text cannot exceed {max_length} characters."
+
+        # Validation for feedback existence
+        if not self.feedback:
+            errors['feedback'] = "The feedback being responded to must exist."
+
+        # Validation to prevent duplicate responses to the same feedback
+        if FeedbackResponse.objects.filter(feedback=self.feedback).exclude(pk=self.pk).exists():
+            errors['feedback'] = "This feedback has already been responded to."
+
+        # Validation for response timing (e.g., not allowing responses to feedback older than 30 days)
+        feedback_age_limit = 30  # days
+        if self.feedback.created_at < datetime.date.today() - datetime.timedelta(days=feedback_age_limit):
+            errors['feedback'] = "Cannot respond to feedback older than 30 days."
+
+        # Raise all validation errors at once
+        if errors:
+            raise ValidationError(errors)
+        
+
 
 
 
