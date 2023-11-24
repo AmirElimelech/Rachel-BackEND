@@ -210,10 +210,10 @@ class CommonUserProfile(TimestampedModel):
     active_until = models.DateField(null=True, blank=True)
     address = encrypt(models.CharField(max_length=200, blank=True, null=True))
     profile_picture = models.ImageField(
-            upload_to='profile_pictures/',
+            upload_to='users/',
             blank=True,
             null=True,
-            default='path/to/default_image.jpg',
+            default='/users/default_user.png',
             verbose_name=_("Profile Picture")
         )    
     city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True)
@@ -444,7 +444,7 @@ class Shelter(TimestampedModel):
     capacity = models.PositiveIntegerField()
     history = HistoricalRecords()
     picture = models.ImageField(
-        upload_to='shelter_pictures/',
+        upload_to='shelters/',
         validators=[
             FileExtensionValidator(allowed_extensions=[
                 'jpg', 'jpeg', 'jfif', 'pjpeg', 'pjp',
