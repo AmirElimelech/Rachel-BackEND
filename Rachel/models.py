@@ -8,6 +8,7 @@ from django_cryptography.fields import encrypt
 from django_countries.fields import CountryField
 from django.contrib.auth.models import User, Group
 from django.core.exceptions import  ValidationError
+from simple_history.models import HistoricalRecords
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
 from django.core.validators import FileExtensionValidator , MaxLengthValidator
@@ -122,6 +123,7 @@ class Intentions(models.Model):
 
     # Use a ManyToManyField with choices
     name = models.CharField(max_length=100, choices=INTENTION_CHOICES, unique=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return self.get_name_display()
@@ -162,6 +164,7 @@ class SupportProviderCategory(TimestampedModel):
     ]
 
     name = models.CharField(max_length=100, choices=CATEGORY_CHOICES, unique=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return self.name
@@ -272,6 +275,7 @@ class Civilian(CommonUserProfile):
     """
     role = models.ForeignKey("auth.Group", default=get_default_role_civilian, editable=False, on_delete=models.CASCADE)
     intentions = models.ManyToManyField('Intentions', blank=True)
+    history = HistoricalRecords()
 
     def clean(self):
         """Add specific validations for Civilian."""
@@ -311,6 +315,7 @@ class SupportProvider(CommonUserProfile):
     looking_to_earn = models.BooleanField(default=False, help_text=_("Indicates if the user is looking to earn through their services."))
     support_provider_categories = models.ManyToManyField('SupportProviderCategory', blank=True, help_text=_("Categories of support provided."))
     additional_info = models.TextField(blank=True, null=True, max_length=250, help_text=_("Additional details about the services offered."))
+    history = HistoricalRecords()
 
     def clean(self):
         """Add specific validations for SupportProvider."""
@@ -359,6 +364,7 @@ class Administrator(CommonUserProfile):
 
     role = models.ForeignKey("auth.Group", default=get_default_role_administrator, editable=False, on_delete=models.CASCADE)
     department = models.CharField(max_length=100, choices=DEPARTMENT_CHOICES, blank=False)
+    history = HistoricalRecords()
 
     def clean(self):
         """Add specific validations for Administrator."""
@@ -436,6 +442,7 @@ class Shelter(TimestampedModel):
     latitude = models.FloatField()  
     longitude = models.FloatField()
     capacity = models.PositiveIntegerField()
+    history = HistoricalRecords()
     picture = models.ImageField(
         upload_to='shelter_pictures/',
         validators=[
@@ -545,6 +552,7 @@ class UserFeedback(TimestampedModel):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     feedback_text = models.TextField()
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"{self.user.username} - Feedback at {self.created_at}"
@@ -563,6 +571,7 @@ class FeedbackResponse(models.Model):
     responder = models.ForeignKey(User, on_delete=models.CASCADE)
     response_text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return f"Response to {self.feedback.user.username}'s feedback"
@@ -634,6 +643,8 @@ class Notification(TimestampedModel):
     message = models.TextField()
     read = models.BooleanField(default=False)
     notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    history = HistoricalRecords()
+
 
     def __str__(self):
         return f"Notification for {self.recipient.username}: {self.title}"
