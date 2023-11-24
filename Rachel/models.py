@@ -701,3 +701,72 @@ class AddressLookup(TimestampedModel):
         """Override the save method to include clean."""
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class UserPreference(TimestampedModel):
+    """
+    Model for storing user-specific preferences and settings.
+
+    Each user has a unique set of preferences which can be adjusted according to their needs.
+    This model extends TimestampedModel to include creation and update timestamps.
+
+    Fields:
+    - user: A one-to-one link to the User model.
+    - dark_mode: Boolean field to enable or disable dark mode.
+    - notification_enabled: Boolean field to enable or disable notifications.
+    - language_preference: User's preferred language.
+    - email_updates: Boolean field to enable or disable email updates.
+    """
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    dark_mode = models.BooleanField(default=False)
+    notification_enabled = models.BooleanField(default=True)
+    language_preference = models.CharField(max_length=100, default='English')
+    email_updates = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s Preferences"
+
+    def clean(self):
+        """Validate the UserPreference data."""
+        super().clean()
+        errors = {}
+
+        # Add specific validations if required
+        # Example: Validate language_preference if you have a predefined list of languages
+
+        if errors:
+            raise ValidationError(errors)
+        
+
+
+
+class SearchHistory(TimestampedModel):
+    """
+    Model for tracking the search history of users.
+
+    This model extends TimestampedModel to include creation, update, and deletion timestamps,
+    which helps in tracking the history of user searches.
+
+    Fields:
+    - user: ForeignKey to the User model, linking each search query to a specific user.
+    - query: The text of the search query.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    query = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.query} - {self.created_at}"
+
+    def clean(self):
+        """Validate the SearchHistory data."""
+        super().clean()
+        errors = {}
+
+        if not self.query:
+            errors['query'] = "The query string cannot be empty."
+
+        if errors:
+            raise ValidationError(errors)
+      
