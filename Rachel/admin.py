@@ -14,6 +14,8 @@ from .models import (
     Notification,
     FeedbackResponse,
     AddressLookup,
+    UserPreference,
+    SearchHistory,
 )
 
 
@@ -110,3 +112,16 @@ class AddressLookupAdmin(admin.ModelAdmin):
         This is in line with the logic used in other admin classes where 'deleted_at' is excluded.
         """
         return super().get_queryset(request).filter(deleted_at__isnull=True)
+    
+
+@admin.register(UserPreference)
+class UserPreferenceAdmin(admin.ModelAdmin):
+    list_display = ('user', 'dark_mode', 'notification_enabled', 'language_preference', 'email_updates')
+    exclude = ('deleted_at',)
+
+
+
+@admin.register(SearchHistory)
+class SearchHistoryAdmin(admin.ModelAdmin):
+    list_display = ('user', 'query', 'created_at')
+    exclude = ('deleted_at',)
