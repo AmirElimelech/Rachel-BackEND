@@ -1,10 +1,8 @@
 
 # Imports 
 
-from django.db import models
-from django.utils import timezone
-from axes.models import AccessAttempt
-from datetime import date ,  timedelta
+from datetime import date 
+from django.db import  models
 from django_cryptography.fields import encrypt
 from django_countries.fields import CountryField
 from django.contrib.auth.models import User, Group
@@ -41,39 +39,6 @@ class TimestampedModel(models.Model):
         abstract = True
 
 
-
-# Language Model
-class Language(TimestampedModel):
-    """
-    Model representing a language. It includes the language name and a unique language code.
-    This model can be used to track different languages spoken by users or supported by the application.
-    Fields:
-    - name: The name of the language.
-    - lang_code: A unique 3-letter code representing the language.
-    """
-
-    name = models.CharField(max_length=100, unique=True)
-    lang_code = models.CharField(
-        max_length=3,
-        unique=True,
-        validators=[MaxLengthValidator(limit_value=3)]
-    )
-    def __str__(self):
-        return self.name
-
-    @property
-    def is_active(self):
-
-        """
-        Checks if the language is actively spoken by any support provider.
-        It looks for profiles marked as active and associated with the "SupportProvider" group.
-        """
-
-        return Profile.objects.filter(
-            languages_spoken=self,
-            active=True,
-            user__groups__name="SupportProvider"
-        ).exists()
 
 
 # Country Model
@@ -155,68 +120,109 @@ class Intentions(models.Model):
     ]
 
     # Use a ManyToManyField with choices
-    intentions = models.ManyToManyField('Intentions', choices=INTENTION_CHOICES, related_name='intention_set')
+    name = models.CharField(max_length=100, choices=INTENTION_CHOICES, unique=True)
 
     def __str__(self):
-        return ', '.join([self.get_intentions_display() for intention in self.intentions.all()])
+        return self.get_name_display()
 
 #SupportProviderCategory Model
 class SupportProviderCategory(TimestampedModel):
-
     """
-    Model representing categories for support providers. Categories could include
-    shelter, medical assistance, food services, etc. This helps in organizing
-    support providers into different services they offer.
-    Fields:
-    - name: The name of the category.
+    Model representing predefined categories for support providers, such as shelter, medical assistance, etc.
+    This helps in organizing support providers into different services they offer.
     """
 
-    name = models.CharField(max_length=100, unique=True)
+    CATEGORY_CHOICES = [
+        ('Shelter and Housing', _('Shelter and Housing')),
+        ('Medical Assistance', _('Medical Assistance')),
+        ('Food Services', _('Food Services')),
+        ('Legal Aid', _('Legal Aid')),
+        ('Mental Health Support', _('Mental Health Support')),
+        ('Employment Assistance', _('Employment Assistance')),
+        ('Educational Support', _('Educational Support')),
+        ('Child Care Services', _('Child Care Services')),
+        ('Senior Care Services', _('Senior Care Services')),
+        ('Disability Support', _('Disability Support')),
+        ('Substance Abuse Treatment', _('Substance Abuse Treatment')),
+        ('Emergency Response', _('Emergency Response')),
+        ('Financial Counseling', _('Financial Counseling')),
+        ('Refugee Assistance', _('Refugee Assistance')),
+        ('Veteran Services', _('Veteran Services')),
+        ('Domestic Violence Support', _('Domestic Violence Support')),
+        ('Transportation Services', _('Transportation Services')),
+        ('Cultural Integration', _('Cultural Integration')),
+        ('Community Outreach', _('Community Outreach')),
+        ('Environmental Sustainability', _('Environmental Sustainability')),
+        ('Youth Programs', _('Youth Programs')),
+        ('Elderly Support', _('Elderly Support')),
+        ('Rehabilitation Services', _('Rehabilitation Services')),
+
+
+    ]
+
+    name = models.CharField(max_length=100, choices=CATEGORY_CHOICES, unique=True)
 
     def __str__(self):
         return self.name
 
 
-
-
-#Profile Model
-class Profile(TimestampedModel):
+class CommonUserProfile(TimestampedModel):
 
     """
-    Model representing user profiles. It includes personal information, preferences,
-    and other relevant details. It is linked to Django's User model for authentication purposes.
-    Fields include identification details, language proficiency, activity status, and more.
+    An abstract base class that serves as a common foundation for different user profiles.
+
+    This class inherits from TimestampedModel to include creation, update, and deletion timestamps. It centralizes common fields and methods used across various user types in the application, such as Civilians, Support Providers, and Administrators.
+
+    Fields:
+    - user: A one-to-one relationship with Django's User model for authentication and identification.
+    - identification_number: A unique identifier for the user (e.g., national ID or passport number).
+    - id_type: The type of identification document.
+    - country_of_issue: The country issuing the identification.
+    - languages_spoken: A many-to-many relationship to track languages spoken by the user.
+    - active_until: A date field to specify until when the profile is considered active.
+    - address: Encrypted field for storing user's address.
+    - profile_picture: Field for uploading a profile picture.
+    - city: Foreign key to the City model, representing the user's city.
+    - country: Country field to represent the user's country.
+    - phone_number: Field for storing a valid phone number.
+    - terms_accepted: Boolean field to indicate whether the user has accepted terms and conditions.
+
     Methods:
-    - clean: Validates the profile data according to specific rules.
+    - clean: Validates the user profile data, ensuring all necessary fields are properly set.
+    - full_phone_number: Property that returns the user's complete phone number in international format.
     """
+
+    ID_TYPE_CHOICES = [
+    ('israeli_id', _('Israeli ID')),
+    ('passport', _('Passport')),
+    ('other', _('Other Identification')),
+    ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    roles = models.ManyToManyField(Group, blank=False)
     identification_number = models.CharField(max_length=20, unique=True, blank=False, null=False, help_text=_("Enter your national identification number."))
-    id_type = models.CharField(max_length=30, blank=False, null=False, help_text=_("Type of identification (e.g., 'Israeli ID', 'Passport')."))
+    id_type = models.CharField(max_length=30, choices=ID_TYPE_CHOICES, blank=False, null=False, help_text=_("Type of identification (e.g., 'Israeli ID', 'Passport')."))
     country_of_issue = CountryField(blank=False, null=False, default='IL',  help_text=_("Country of issue of the identification."))
     languages_spoken = models.ManyToManyField('Language', blank=True)
-    active = models.BooleanField(default=False)
     active_until = models.DateField(null=True, blank=True)
-    looking_to_earn = models.BooleanField(default=False)
-    intentions = models.ManyToManyField('Intentions', blank=True)
     address = encrypt(models.CharField(max_length=200, blank=True, null=True))
     profile_picture = models.ImageField(
-        upload_to='profile_pictures/',
-        blank=True,
-        null=True,
-        default='path/to/default_image.jpg',
-        verbose_name=_("Profile Picture")
-    )
-    country = CountryField(blank_label='(select country)', blank=True, null=True)
-    phone_number = PhoneNumberField(blank=True, null=True, help_text=_('Enter a valid phone number'))
+            upload_to='profile_pictures/',
+            blank=True,
+            null=True,
+            default='path/to/default_image.jpg',
+            verbose_name=_("Profile Picture")
+        )    
+    city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True)
+    country = CountryField(blank_label='(select country)', blank=True)
+    phone_number = PhoneNumberField(blank=True, null=True)
     terms_accepted = models.BooleanField(default=False, verbose_name=_("Terms Accepted"))
 
-
+    class Meta:
+        abstract = True
 
     def clean(self):
-        """Validate the profile data."""
-        super().clean()  # Call the base class clean method
+        """Validate the common user profile data."""
+        super().clean()
         errors = {}
 
         if not self.languages_spoken.exists():
@@ -228,56 +234,185 @@ class Profile(TimestampedModel):
         if not self.phone_number:
             errors['phone_number'] = _("A phone number is required.")
 
-        if 'Civilian' in self.roles.values_list('name', flat=True) and not self.intentions.exists():
-            errors['intentions'] = _("At least one intention must be selected for civilians.")
-
         if not self.terms_accepted:
             errors['terms_accepted'] = _("You must accept the terms to create an account.")
 
-
         if errors:
             raise ValidationError(errors)
-
+        
 
     def __str__(self):
         return f"{self.user.username} Profile"
+    
 
     @property
     def full_phone_number(self):
-        """
-        Return the combined international phone number, consisting of the country's dialing code and the user's local phone number.
-        """
+        """Return the combined international phone number."""
         if self.phone_number:
             return self.phone_number.as_e164
         return None
 
 
 
-#SupportProvider Model
-class SupportProvider(TimestampedModel):
+def get_default_role_civilian():
+    return Group.objects.get(name='Civilian')
 
+class Civilian(CommonUserProfile):
     """
-    Model representing support providers, individuals or organizations that offer
-    assistance or services. Each support provider is linked to a profile and categorized.
-    Additional information about the services provided can be included.
+    Model representing civilian users in the application.
+
+    This model inherits from CommonUserProfile, which includes common fields and methods shared across different user types. It adds specific fields and validations related to civilians.
+
     Fields:
-    - profile: A link to the user profile of the support provider.
-    - category: The category of services provided.
-    - additional_info: Additional details about the services offered.
-    """
+    - intentions: A many-to-many relationship to the Intentions model, allowing civilians to select multiple intentions or reasons for seeking assistance.
 
-    profile = models.OneToOneField(Profile, on_delete=models.CASCADE)
-    category = models.ForeignKey(SupportProviderCategory, on_delete=models.CASCADE)
-    additional_info = models.TextField(blank=True, null=True , max_length= 250)
+    Methods:
+    - clean: Extends the validation logic from CommonUserProfile to include civilian-specific validations.
+    """
+    role = models.ForeignKey("auth.Group", default=get_default_role_civilian, editable=False, on_delete=models.CASCADE)
+    intentions = models.ManyToManyField('Intentions', blank=True)
+
+    def clean(self):
+        """Add specific validations for Civilian."""
+        super().clean()  # Calls the clean method of CommonUserProfile
+        errors = {}
+
+        # Add Civilian-specific validations
+        if not self.intentions.exists():
+            errors['intentions'] = _("At least one intention must be selected for civilians.")
+
+        if errors:
+            raise ValidationError(errors)
 
     def __str__(self):
-        return f"{self.category.name} - {self.profile.user.username}"
+        return f"{self.user.username} - Civilian"
+    
+
+def get_default_role_supportprovider():
+    return Group.objects.get(name='SupportProvider')
+
+class SupportProvider(CommonUserProfile):
+
+    """
+    Model representing a support provider user.
+
+    Inherits common fields and methods from CommonUserProfile and adds specific fields related to the support provider role.
+    
+    Fields:
+    - looking_to_earn: Boolean field indicating whether the support provider is looking to earn through their services.
+    - support_provider_categories: ManyToMany relationship to track categories of support provided by the user.
+    - additional_info: Text field for storing additional information about the support services offered.
+
+    Inherits all validations and the full_phone_number method from CommonUserProfile.
+    """
+
+    role = models.ForeignKey("auth.Group", default=get_default_role_supportprovider, editable=False, on_delete=models.CASCADE)
+    looking_to_earn = models.BooleanField(default=False, help_text=_("Indicates if the user is looking to earn through their services."))
+    support_provider_categories = models.ManyToManyField('SupportProviderCategory', blank=True, help_text=_("Categories of support provided."))
+    additional_info = models.TextField(blank=True, null=True, max_length=250, help_text=_("Additional details about the services offered."))
+
+    def clean(self):
+        """Add specific validations for SupportProvider."""
+        super().clean()  # This calls the clean method of CommonUserProfile
+        errors = {}
+
+        # Add SupportProvider-specific validations
+        if not self.support_provider_categories.exists():
+            errors['support_provider_categories'] = _("At least one category must be selected for support providers.")
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.user.username} - SupportProvider"
+
+
+
+def get_default_role_administrator():
+    return Group.objects.get(name='Administrator')
+
+class Administrator(CommonUserProfile):
+
+    """
+    Model representing an administrator user.
+
+    Inherits common fields and methods from CommonUserProfile. This model is tailored for users who manage and oversee the application, typically with higher-level access and control.
+
+    Fields specific to the Administrator role can be added as needed. Currently, it includes only the common fields from CommonUserProfile.
+
+    Inherits all validations and the full_phone_number method from CommonUserProfile.
+
+    Fields:
+    department: Administrator's department or area of responsibility, chosen from predefined choices.
+
+    """
+
+    DEPARTMENT_CHOICES = [
+        ('HR', _('Human Resources')),
+        ('IT', _('Information Technology')),
+        ('FIN', _('Finance')),
+        ('MKT', _('Marketing')),
+        ('OPS', _('Operations')),
+        # Add more departments as needed
+    ]
+
+    role = models.ForeignKey("auth.Group", default=get_default_role_administrator, editable=False, on_delete=models.CASCADE)
+    department = models.CharField(max_length=100, choices=DEPARTMENT_CHOICES, blank=False)
+
+    def clean(self):
+        """Add specific validations for Administrator."""
+        super().clean()  # This calls the clean method of CommonUserProfile
+        # Add Administrator-specific validations here if necessary
+        errors = {}
+
+         # Validation to ensure department is not empty
+        if not self.department:
+            errors['department'] = _("Department cannot be empty for an Administrator.")
+
+        if errors:
+            raise ValidationError(errors)
+
+
+    def __str__(self):
+        return f"{self.user.username} - Administrator"
+
+
+
+
+
+# Language Model
+class Language(TimestampedModel):
+    """
+    Model representing a language. It includes the language name and a unique language code.
+    This model can be used to track different languages spoken by users or supported by the application.
+    Fields:
+    - name: The name of the language.
+    - lang_code: A unique 3-letter code representing the language.
+    """
+
+    name = models.CharField(max_length=100, unique=True)
+    lang_code = models.CharField(
+        max_length=3,
+        unique=True,
+        validators=[MaxLengthValidator(limit_value=3)]
+    )
+    def __str__(self):
+        return self.name
+
+    @property
+    def is_active(self):
+        """
+        Checks if the language is actively spoken by any active user in the system.
+        """
+        return Civilian.objects.filter(languages_spoken=self, active_until__gte=date.today()).exists() or \
+               SupportProvider.objects.filter(languages_spoken=self, active_until__gte=date.today()).exists() or \
+               Administrator.objects.filter(languages_spoken=self, active_until__gte=date.today()).exists()
 
 
 
 
 # Shelters Model
-class Shelters(TimestampedModel):
+class Shelter(TimestampedModel):
 
     """
     Model representing shelters. Includes details like location, capacity, and related images.
@@ -295,8 +430,8 @@ class Shelters(TimestampedModel):
 
     name = models.CharField(max_length=200)
     address = models.CharField(max_length=200)
-    city = models.ForeignKey('City', on_delete=models.SET_NULL, null=True)
-    country = models.ForeignKey('Country', on_delete=models.SET_NULL, null=True)
+    city = models.ForeignKey('City', on_delete=models.CASCADE)
+    country = models.ForeignKey('Country', on_delete=models.CASCADE)
     latitude = models.FloatField()  
     longitude = models.FloatField()
     capacity = models.PositiveIntegerField()
@@ -310,15 +445,14 @@ class Shelters(TimestampedModel):
             ]),
         ]
     )
-    support_provider = models.OneToOneField(
-        SupportProvider,
-        on_delete=models.CASCADE,
-        limit_choices_to={'category__name': "Shelter"},
-        null=True,
-        blank=True
-    )
+    support_provider = models.ForeignKey(SupportProvider,on_delete=models.CASCADE,
+    limit_choices_to={'support_provider_categories__name': "Shelter and Housing"},
+    null=True,
+    blank=True
+)
 
     def clean(self):
+
         """Validate the shelter data."""
         super().clean()  # Call the base class clean method
         errors = {}
@@ -326,9 +460,12 @@ class Shelters(TimestampedModel):
         if self.capacity <= 0:
             errors['capacity'] = _("Capacity must be a positive number.")
 
-        # Geolocation validation
-        if self.latitude is not None and self.longitude is not None:
-            latitude, longitude = self.latitude, self.longitude
+        # Latitude and Longitude validation
+        if self.latitude is not None and not -90 <= self.latitude <= 90:
+            errors['latitude'] = _("Latitude must be between -90 and 90 degrees.")
+
+        if self.longitude is not None and not -180 <= self.longitude <= 180:
+            errors['longitude'] = _("Longitude must be between -180 and 180 degrees.")
 
         if self.city is None or self.country is None:
             errors['location'] = _("A shelter must be associated with a city and a country.")
@@ -344,13 +481,13 @@ class Shelters(TimestampedModel):
     @property
     def phone(self):
         if self.support_provider:
-            return self.support_provider.profile.phone_number
+            return self.support_provider.phone_number
         return None
 
     @property
     def email(self):
         if self.support_provider:
-            return self.support_provider.profile.user.email
+            return self.support_provider.user.email
         return None
 
 
@@ -412,3 +549,31 @@ class UserFeedback(TimestampedModel):
         return f"{self.user.username} - Feedback at {self.created_at}"
 
 
+
+
+class Notification(TimestampedModel):
+    """
+    Model for handling notifications for users. Notifications can be of various types like alerts, reminders, or informational messages.
+    Fields:
+    - recipient: Reference to the User model indicating who will receive the notification.
+    - title: A brief title for the notification.
+    - message: The content of the notification.
+    - read: Boolean field indicating whether the notification has been read.
+    - notification_type: The type of notification (e.g., 'alert', 'reminder', 'info').
+    - created_at: Timestamp for when the notification was created.
+    - updated_at: Timestamp for when the notification was last updated.
+    """
+    NOTIFICATION_TYPES = [
+        ('alert', _('Alert')),
+        ('reminder', _('Reminder')),
+        ('info', _('Information')),
+    ]
+
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=100)
+    message = models.TextField()
+    read = models.BooleanField(default=False)
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+
+    def __str__(self):
+        return f"Notification for {self.recipient.username}: {self.title}"
