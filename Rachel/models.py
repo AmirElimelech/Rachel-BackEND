@@ -648,3 +648,56 @@ class Notification(TimestampedModel):
 
     def __str__(self):
         return f"Notification for {self.recipient.username}: {self.title}"
+
+
+
+
+
+
+class AddressLookup(TimestampedModel):
+
+    """
+    Model to store address lookup data retrieved from an external API (such as Nominatim).
+
+    This model extends TimestampedModel, inheriting fields for creation, update, and deletion timestamps, 
+    which helps in tracking the history of address lookups.
+
+    Fields:
+    - user: ForeignKey to the User model, linking the address lookup to a specific user.
+    - query: The original query string used for the address lookup.
+    - place_id: A unique identifier for the place as returned by the API.
+    - latitude: Latitude coordinate of the location.
+    - longitude: Longitude coordinate of the location.
+    - display_name: A human-readable name representing the location.
+    - boundingbox: JSON field containing the geographical bounding box of the location.
+
+    The __str__ method returns a string representation of the model, 
+    which includes the username of the user who made the query and the query itself.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    query = models.CharField(max_length=255)
+    place_id = models.BigIntegerField()
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    display_name = models.TextField()
+    boundingbox = models.JSONField()
+
+    def clean(self):
+        """Validate the AddressLookup data."""
+        super().clean()
+        errors = {}
+
+        if not self.query:
+            errors['query'] = "The query string cannot be empty."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.query}"
+
+    def save(self, *args, **kwargs):
+        """Override the save method to include clean."""
+        self.full_clean()
+        super().save(*args, **kwargs)
