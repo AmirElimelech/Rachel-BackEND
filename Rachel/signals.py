@@ -1,12 +1,15 @@
 
+
 import logging
 from .DAL import DAL
+from datetime import date
 from django.dispatch import receiver
 from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from django.db.models.signals import post_save
 from django.contrib.auth import  get_user_model
 from .utils import alert_for_suspicious_activity
-from .models import User, Shelter, UserActivity , Profile , Group
+from .models import User, Shelter, UserActivity , Group , SupportProvider 
 from django.contrib.auth.signals import user_logged_in, user_login_failed , user_logged_out
 
 
@@ -17,76 +20,74 @@ logger = logging.getLogger(__name__)
 dal = DAL()
 
 
-
 @receiver(post_save, sender=User)
 def create_shelter_signal(sender, instance, created, **kwargs):
     """
     Create a shelter for new support provider users categorized as 'Shelter and Housing'.
     This function is triggered after a User instance is saved and checks if the user
-    has a related Profile marked as a support provider in the 'Shelter and Housing' category.
-    If so, and if a Shelter does not already exist for this profile, a new Shelter instance is created.
+    is a SupportProvider in the 'Shelter and Housing' category.
+    If so, and if a Shelter does not already exist for this SupportProvider, a new Shelter instance is created.
     """
     try:
-        if created:
+        if created and instance.groups.filter(name='SupportProvider').exists():
             logger.info(f"Checking for shelter creation conditions for user: {instance.username}")
 
-            # Use DAL to get the related Profile instance
-            profile = dal.get_related(instance, 'profile')
+            # Use DAL to get the related SupportProvider instance
+            support_provider = dal.get_related(instance, 'supportprovider')
 
-            if not profile:
-                logger.error(f"User {instance.username} does not have a profile associated")
+            if not support_provider:
+                logger.error(f"User {instance.username} does not have a SupportProvider associated")
                 return
 
-            logger.info(f"Profile found for user: {instance.username}. Checking if user is a support provider.")
+            logger.info(f"SupportProvider found for user: {instance.username}. Checking for 'Shelter and Housing' category.")
 
-            if profile.is_support_provider:
-                logger.info(f"Profile {profile} is marked as support provider. Checking for 'Shelter and Housing' category.")
+            # Check if the support provider is in the 'Shelter and Housing' category
+            if 'Shelter and Housing' in support_provider.support_provider_categories.values_list('name', flat=True):
+                logger.info(f"SupportProvider {support_provider} has 'Shelter and Housing' category.")
 
-                # Check if the profile is in the 'Shelter and Housing' category
-                if 'Shelter and Housing' in profile.support_provider_categories.values_list('name', flat=True):
-                    logger.info(f"Profile {profile} has 'Shelter and Housing' category.")
+                # Check if a Shelter with this provider does not exist
+                if not dal.filter(Shelter, support_provider=support_provider).exists():
+                    logger.info(f"No existing shelter found for {support_provider}. Creating new shelter.")
 
-                    # Check if a Shelter with this provider does not exist
-                    if not dal.filter(Shelter, support_provider=profile).exists():
-                        logger.info(f"No existing shelter found for {profile}. Creating new shelter.")
+                    # Use DAL to create a new Shelter instance
+                    new_shelter = dal.create(
+                        Shelter,
+                        name=f"Shelter by {instance.username}",
+                        support_provider=support_provider
+                    )
 
-                        # Use DAL to create a new Shelter instance
-                        new_shelter = dal.create(
-                            Shelter,
-                            name=f"Shelter by {instance.username}",
-                            support_provider=profile
-                        )
+                    if new_shelter:
+                        logger.info(f"New shelter created: {new_shelter.name}. Sending notification to administrators.")
+                        admin_group = dal.get_by_field(Group, name='Administrator')
+                        if admin_group:
+                            admin_emails = [user.email for user in admin_group.user_set.all() if user.email]
 
-                        if new_shelter:
-                            logger.info(f"New shelter created: {new_shelter.name}. Sending notification to administrators.")
-                            admin_group = dal.get_by_field(Group, name='Administrator')
-                            if admin_group:
-                                admin_emails = [user.email for user in admin_group.user_set.all() if user.email]
+                            # Send email to all administrators
+                            send_mail(
+                                'New Shelter Registration',
+                                f'A new shelter {new_shelter.name} has been created and needs review.',
+                                'Rachel.for.Israel@gmail.com',
+                                admin_emails,
+                                fail_silently=False,
+                            )
 
-                                # Send email to all administrators
-                                send_mail(
-                                    'New Shelter Registration',
-                                    f'A new shelter {new_shelter.name} has been created and needs review.',
-                                    'Rachel.for.Israel@gmail.com',
-                                    admin_emails,
-                                    fail_silently=False,
-                                )
-
-                            logger.info(f"Notification sent for new shelter: {new_shelter.name}")
-                        else:
-                            logger.error(f"Failed to create a new shelter for {profile}")
+                        logger.info(f"Notification sent for new shelter: {new_shelter.name}")
                     else:
-                        logger.info(f"Shelter already exists for {profile}")
+                        logger.error(f"Failed to create a new shelter for {support_provider}")
                 else:
-                    logger.info(f"Profile {profile} does not have 'Shelter and Housing' category.")
+                    logger.info(f"Shelter already exists for {support_provider}")
             else:
-                logger.info(f"Profile {profile} is not marked as a support provider.")
+                logger.info(f"SupportProvider {support_provider} does not have 'Shelter and Housing' category.")
+        else:
+            logger.info(f"No action needed for user {instance.username} as it's not a new SupportProvider.")
+
     except Exception as e:
         logger.error(f"Error in create_shelter_signal for user {instance.username}: {e}")
 
 
 
-@receiver(post_save, sender=Profile)
+
+@receiver(post_save, sender=SupportProvider)
 def account_activation_notification(sender, instance, **kwargs):
     """
     Send an account activation notification to support providers upon the activation of their account.
@@ -101,26 +102,26 @@ def account_activation_notification(sender, instance, **kwargs):
     :param kwargs: Additional keyword arguments.
     """
     try:
-        if instance.is_active:  # Assuming `is_active` is a field on SupportProvider.
+        # Check if the account is active and the user is a SupportProvider
+        if instance.active_until and instance.active_until >= date.today():
             # Log the initiation of the email sending process
-            logger.info(f"Attempting to send account activation email to: {instance.profile.user.email}")
+            logger.info(f"Attempting to send account activation email to: {instance.user.email}")
 
             send_mail(
                 'Account Activated',
-                f'Your shelter account {instance.profile.user.username} has been activated.',
-                'Please login again , Thank you for generous support',
+                f'Your support provider account {instance.user.username} has been activated.',
+                'Please login again, thank you for your generous support.',
                 'Rachel.for.Israel@gmail.com',
                 [instance.user.email],
                 fail_silently=False,
             )
 
             # Log the successful email sending
-            logger.info(f"Account activation email successfully sent to: {instance.profile.user.email}")
+            logger.info(f"Account activation email successfully sent to: {instance.user.email}")
 
     except Exception as e:
         # Log the exception and handle accordingly
-        logger.error(f"Error in account_activation_notification for {instance.profile.user.email}: {e}")
-
+        logger.error(f"Error in account_activation_notification for {instance.user.email}: {e}")
 
 
 
@@ -181,8 +182,6 @@ def track_user_logout(sender, request, user, **kwargs):
 
 
 
-
-
 @receiver(post_save, sender=User, dispatch_uid="send_welcome_email")
 def send_welcome_email(sender, instance, created, **kwargs):
     """
@@ -203,14 +202,13 @@ def send_welcome_email(sender, instance, created, **kwargs):
             # Log the initiation of the email sending process
             logger.info(f"Attempting to send welcome email to new user: {instance.email}")
 
-            send_mail(
+            message = EmailMessage(
                 'Welcome to Our Service',
                 'Here’s how to get started...',
-                'now i should remember to right something about the project etc...',
                 'Rachel.for.Israel@gmail.com',
                 [instance.email],
-                fail_silently=False,
             )
+            message.send()
 
             # Log the successful email sending
             logger.info(f"Welcome email successfully sent to: {instance.email}")
@@ -218,9 +216,6 @@ def send_welcome_email(sender, instance, created, **kwargs):
     except Exception as e:
         # Log the exception and handle accordingly
         logger.error(f"Error in send_welcome_email for {instance.email}: {e}")
-
-
-
 
 
 @receiver(user_login_failed)
