@@ -273,7 +273,18 @@ class Civilian(CommonUserProfile):
     Methods:
     - clean: Extends the validation logic from CommonUserProfile to include civilian-specific validations.
     """
+
+
+    GENDER_CHOICES = [
+        ('male', _('Male')),
+        ('female', _('Female')),
+        ('rather_not_say', _('Rather not say')),
+    ]
+
+
+
     role = models.ForeignKey("auth.Group", default=get_default_role_civilian, editable=False, on_delete=models.CASCADE)
+    gender = models.CharField(max_length=15, choices=GENDER_CHOICES, default='rather_not_say')
     intentions = models.ManyToManyField('Intentions', blank=True)
     history = HistoricalRecords()
 
