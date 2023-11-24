@@ -13,6 +13,7 @@ from .models import (
     UserFeedback,
     Notification,
     FeedbackResponse,
+    AddressLookup,
 )
 
 
@@ -96,3 +97,16 @@ class FeedbackResponseAdmin(admin.ModelAdmin):
     list_display = ('feedback', 'responder', 'response_text', 'created_at')
 
     
+
+
+@admin.register(AddressLookup)
+class AddressLookupAdmin(admin.ModelAdmin):
+    list_display = ('user', 'query', 'place_id', 'latitude', 'longitude', 'display_name')
+    exclude = ('deleted_at',)
+
+    def get_queryset(self, request):
+        """
+        Override the queryset to filter out any entries that have a deleted timestamp.
+        This is in line with the logic used in other admin classes where 'deleted_at' is excluded.
+        """
+        return super().get_queryset(request).filter(deleted_at__isnull=True)
