@@ -12,7 +12,10 @@ from .models import (
     UserActivity,
     UserFeedback,
     Notification,
+    FeedbackResponse,
 )
+
+
 
 
 @admin.register(Country)
@@ -85,3 +88,11 @@ class SupportProviderAdmin(admin.ModelAdmin):
 class AdministratorAdmin(admin.ModelAdmin):
     list_display = ('user', 'identification_number', 'id_type', 'country_of_issue', 'active_until', 'city', 'country', 'phone_number', 'terms_accepted', 'department')
     exclude = ('deleted_at',)
+
+
+
+@admin.register(FeedbackResponse)
+class FeedbackResponseAdmin(admin.ModelAdmin):
+    list_display = ('feedback', 'responder', 'response_text', 'created_at')
+
+    
