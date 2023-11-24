@@ -1,9 +1,12 @@
 import logging
 from .DAL import DAL
+from Rachel.models import Country
 from axes.models import AccessAttempt
 from django.core.mail import send_mail
 from django.contrib.auth.models import Group
 from axes.helpers import get_client_ip_address
+from django.core.exceptions import ValidationError
+
 
 
 
@@ -95,3 +98,40 @@ def alert_for_suspicious_activity(username, request=None):
 
     except Exception as e:
         logger.exception(f"Error in alert_for_suspicious_activity: {str(e)}")
+
+
+
+
+def clean_phone_number(country_id, phone_number):
+    """
+    Validates and formats a phone number based on the country's phone code and ensures it has a specific length.
+
+    This function takes a country ID and a phone number as inputs. It uses the DAL to fetch the corresponding
+    country instance and retrieve its phone code. The phone number is then formatted with the country's phone code.
+    It also checks if the phone number has the required length (10 digits) after formatting.
+
+    Args:
+    country_id (int): The ID of the country to which the phone number belongs.
+    phone_number (str): The phone number to be cleaned and formatted.
+
+    Returns:
+    str: The formatted phone number in international format.
+
+    Raises:
+    ValidationError: If the country ID is invalid, the DAL cannot find the country instance, or if the phone number
+                     does not have the required length.
+    """
+    
+    country_instance = dal.get_by_id(Country, country_id)
+    if phone_number and country_instance:
+        phone_number = phone_number.lstrip('0')
+        phone_code = country_instance.phone_code
+        full_phone_number = f"+{phone_code}{phone_number}"
+
+        # Check if the phone number has 10 digits
+        if len(phone_number) != 10:
+            raise ValidationError("Phone number must be 10 digits long.")
+
+        return full_phone_number
+    else:
+        raise ValidationError("Invalid country selected.")
