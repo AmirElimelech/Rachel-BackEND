@@ -16,7 +16,8 @@ from .models import (
     AddressLookup,
     UserPreference,
     SearchHistory,
-    UnauthorizedAccessAttempt
+    UnauthorizedAccessAttempt,
+    ConfirmationCode
 )
 
 
@@ -127,4 +128,9 @@ class UnauthorizedAccessAttemptAdmin(admin.ModelAdmin):
     list_display = ('user', 'ip_address', 'timestamp', 'browser', 'operating_system', 'country')
     search_fields = ('user__email', 'ip_address')
     list_filter = ('timestamp', 'country')
-    exclude = ('deleted_at',)
+    
+
+@admin.register(ConfirmationCode)
+class ConfirmationCodeAdmin(admin.ModelAdmin):
+    list_display = ('user', 'code', 'created_at', 'action_type')
+    list_filter = ('user',)
