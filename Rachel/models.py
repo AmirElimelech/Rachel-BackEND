@@ -2,7 +2,7 @@
 # Imports 
 
 import datetime
-from datetime import date 
+from datetime import date
 from django.db import  models
 from django_cryptography.fields import encrypt
 from django_countries.fields import CountryField
@@ -10,8 +10,12 @@ from django.contrib.auth.models import User, Group
 from django.core.exceptions import  ValidationError
 from simple_history.models import HistoricalRecords
 from django.utils.translation import gettext_lazy as _
+from django.core.validators import validate_ipv46_address
 from phonenumber_field.modelfields import PhoneNumberField
 from django.core.validators import FileExtensionValidator , MaxLengthValidator
+
+
+
 
 
 
@@ -781,3 +785,72 @@ class SearchHistory(TimestampedModel):
         if errors:
             raise ValidationError(errors)
       
+
+class UnauthorizedAccessAttempt(models.Model):
+
+    """
+    This model records unauthorized attempts to access user accounts.
+    It stores the IP address from which the attempt was made, the timestamp of the attempt,
+    and optionally the browser and operating system used for the attempt. The country field
+    links to a Country model instance, providing geographical context for the attempt.
+
+    Attributes:
+    - user (ForeignKey): Reference to the User model for the account that was targeted.
+    - ip_address (GenericIPAddressField): The IP address from where the attempt was made.
+    - timestamp (DateTimeField): The date and time when the attempt occurred.
+    - browser (CharField): The browser used for the attempt, if available.
+    - operating_system (CharField): The operating system of the device used, if available.
+    - country (ForeignKey): The country inferred from the IP address, linked to the Country model.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name=_("User"))
+    ip_address = models.GenericIPAddressField(verbose_name=_("IP Address"))
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name=_("Timestamp"))
+    browser = models.CharField(max_length=255, blank=True, verbose_name=_("Browser"))
+    operating_system = models.CharField(max_length=255, blank=True, verbose_name=_("Operating System"))
+    country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Country"))
+
+    def __str__(self):
+        return f"Unauthorized access attempt on {self.user.email} from IP: {self.ip_address}"
+
+    def clean(self):
+        """
+        Perform validations on the UnauthorizedAccessAttempt model.
+        """
+        errors = {}
+
+        # IP Address validation
+        if not self.ip_address:
+            errors['ip_address'] = _("IP Address cannot be empty.")
+        else:
+            try:
+                validate_ipv46_address(self.ip_address)
+            except ValidationError:
+                errors['ip_address'] = _("Invalid IP address format.")
+
+
+        # Browser field length validation
+        if self.browser and len(self.browser) > 255:
+            errors['browser'] = _("Browser field cannot exceed 255 characters.")
+
+        if not self.browser:
+            errors['browser'] = _("Browser information is required.")
+
+        # Operating System field length validation
+        if self.operating_system and len(self.operating_system) > 255:
+            errors['operating_system'] = _("Operating System field cannot exceed 255 characters.")
+
+        # User and Country existence check
+        if not self.user_id:
+            errors['user'] = _("User must be specified.")
+        if self.country_id and not Country.objects.filter(id=self.country_id).exists():
+            errors['country'] = _("Specified country does not exist.")
+
+        # Raise all validation errors at once
+        if errors:
+            raise ValidationError(errors)
+    
+
+    class Meta:
+        verbose_name = _("Unauthorized Access Attempt")
+        verbose_name_plural = _("Unauthorized Access Attempts")
