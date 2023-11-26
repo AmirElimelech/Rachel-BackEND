@@ -18,6 +18,7 @@ from django.core.exceptions import ValidationError
 SUSPICIOUS_ATTEMPT_THRESHOLD = 5
 
 dal = DAL()
+
 logger = logging.getLogger(__name__)
 
 
@@ -118,20 +119,32 @@ def clean_phone_number(country_id, phone_number):
     str: The formatted phone number in international format.
 
     Raises:
-    ValidationError: If the country ID is invalid, the DAL cannot find the country instance, or if the phone number
-                     does not have the required length.
+    ValidationError: If any of the validations fail.
     """
     
+    
     country_instance = dal.get_by_id(Country, country_id)
-    if phone_number and country_instance:
-        phone_number = phone_number.lstrip('0')
-        phone_code = country_instance.phone_code
-        full_phone_number = f"+{phone_code}{phone_number}"
 
-        # Check if the phone number has 10 digits
-        if len(phone_number) != 10:
-            raise ValidationError("Phone number must be 10 digits long.")
+    errors = {}
+    if not phone_number.isdigit():
+        errors['phone_number'] = "Phone number must contain only digits."
 
-        return full_phone_number
-    else:
-        raise ValidationError("Invalid country selected.")
+    if phone_number.startswith('+') or (country_instance and phone_number.startswith(country_instance.phone_code)):
+        errors['phone_number'] = "Phone number should not include the country code."
+
+    if not 10 <= len(phone_number) <= 15:
+        errors['phone_number'] = "Phone number length must be between 7 and 15 digits."
+
+    if errors:
+        raise ValidationError(errors)
+
+
+
+    phone_number = phone_number.lstrip('0')
+
+    # now this part i ensured that the original phone_number provided as input is used as-is, without any formatting if the country was not found in the database 
+    # if it was found it will create the full phonen number for example Israeli phone number = +972546227171 
+
+    full_phone_number = f"+{country_instance.phone_code}{phone_number}" if country_instance else phone_number
+
+    return full_phone_number

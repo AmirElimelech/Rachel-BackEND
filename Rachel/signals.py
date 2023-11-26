@@ -2,14 +2,13 @@
 
 import logging
 from .DAL import DAL
-from datetime import date
 from django.dispatch import receiver
 from django.core.mail import send_mail
 from django.core.mail import EmailMessage
 from django.db.models.signals import post_save
 from django.contrib.auth import  get_user_model
 from .utils import alert_for_suspicious_activity
-from .models import User, Shelter, UserActivity , Group , SupportProvider 
+from .models import User, Shelter, UserActivity , Group , SupportProvider ,Civilian
 from django.contrib.auth.signals import user_logged_in, user_login_failed , user_logged_out
 
 
@@ -87,45 +86,6 @@ def create_shelter_signal(sender, instance, created, **kwargs):
 
 
 
-# @receiver(post_save, sender=SupportProvider)
-# def account_activation_notification(sender, instance, **kwargs):
-#     """
-#     Send an account activation notification to support providers upon the activation of their account.
-
-#     This method is enhanced with logging to track its execution. 
-#     It logs when an attempt is made to send an account activation notification 
-#     and reports success or failure, providing visibility into the process 
-#     and aiding in troubleshooting if any issues arise.
-
-#     :param sender: The model class (SupportProvider) sending the signal.
-#     :param instance: The instance of the model just saved.
-#     :param kwargs: Additional keyword arguments.
-#     """
-#     try:
-#         # Check if the account is active and the user is a SupportProvider
-#         if instance.active_until and instance.active_until >= date.today():
-#             # Log the initiation of the email sending process
-#             logger.info(f"Attempting to send account activation email to: {instance.user.email}")
-
-#             send_mail(
-#                 'Account Activated',
-#                 f'Your support provider account {instance.user.username} has been activated.',
-#                 'Please login again, thank you for your generous support.',
-#                 'Rachel.for.Israel@gmail.com',
-#                 [instance.user.email],
-#                 fail_silently=False,
-#             )
-
-#             # Log the successful email sending
-#             logger.info(f"Account activation email successfully sent to: {instance.user.email}")
-
-#     except Exception as e:
-#         # Log the exception and handle accordingly
-#         logger.error(f"Error in account_activation_notification for {instance.user.email}: {e}")
-
-
-
-
 @receiver(post_save, sender=User)
 def account_activation_notification(sender, instance, created, **kwargs):
     """
@@ -147,14 +107,13 @@ def account_activation_notification(sender, instance, created, **kwargs):
             # Log the initiation of the email sending process
             logger.info(f"Attempting to send account activation email to: {instance.email}")
 
-            send_mail(
-                'Account Activated',
-                f'Your account {instance.username} has been activated.',
-                'Please login again, thank you.',
-                'Rachel.for.Israel@gmail.com',
-                [instance.email],
-                fail_silently=False,
-            )
+            message = EmailMessage(
+            subject='Account Activated',
+            body=f'Your account {instance.username} has been activated. Please login again, thank you.',
+            from_email='Rachel.for.Israel@gmail.com',
+            to=[instance.email],  # Ensure this is a list
+        )
+            message.send()
 
             # Log the successful email sending
             logger.info(f"Account activation email successfully sent to: {instance.email}")
@@ -162,6 +121,30 @@ def account_activation_notification(sender, instance, created, **kwargs):
     except Exception as e:
         # Log the exception and handle accordingly
         logger.error(f"Error in account_activation_notification for {instance.email}: {e}")
+
+
+
+@receiver(post_save, sender=Civilian)
+@receiver(post_save, sender=SupportProvider)
+def profile_update_notification(sender, instance, created, **kwargs):
+    """
+    Send a notification when a Civilian or SupportProvider profile is updated.
+    """
+    if not created:  # Ensure this is not a new record but an update
+        try:
+            # Logic to send an email notification about the profile update
+            send_mail(
+                subject='Profile Updated',
+                message='Your profile has been successfully updated.',
+                from_email='Rachel.for.Isreal@gmail.com',
+                recipient_list=[instance.user.email],
+                fail_silently=False,
+            )
+
+            logger.info(f"Profile update notification email sent to: {instance.user.email}")
+
+        except Exception as e:
+            logger.error(f"Error in profile_update_notification for {instance.user.email}: {e}")
 
 
 
