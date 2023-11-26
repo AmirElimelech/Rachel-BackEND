@@ -16,6 +16,7 @@ from .models import (
     AddressLookup,
     UserPreference,
     SearchHistory,
+    UnauthorizedAccessAttempt
 )
 
 
@@ -118,4 +119,12 @@ class UserPreferenceAdmin(admin.ModelAdmin):
 @admin.register(SearchHistory)
 class SearchHistoryAdmin(admin.ModelAdmin):
     list_display = ('user', 'query', 'created_at')
+    exclude = ('deleted_at',)
+
+
+@admin.register(UnauthorizedAccessAttempt)
+class UnauthorizedAccessAttemptAdmin(admin.ModelAdmin):
+    list_display = ('user', 'ip_address', 'timestamp', 'browser', 'operating_system', 'country')
+    search_fields = ('user__email', 'ip_address')
+    list_filter = ('timestamp', 'country')
     exclude = ('deleted_at',)
