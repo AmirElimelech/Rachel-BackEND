@@ -1,9 +1,11 @@
 
 # Imports 
 
+import random
 import datetime
 from datetime import date
 from django.db import  models
+from django.utils import timezone
 from django_cryptography.fields import encrypt
 from django_countries.fields import CountryField
 from django.contrib.auth.models import User, Group
@@ -43,6 +45,7 @@ class TimestampedModel(models.Model):
 
     class Meta:
         abstract = True
+        
 
 
 
@@ -68,6 +71,10 @@ class Country(TimestampedModel):
 
     def __str__(self):
         return self.name
+    
+    class Meta:
+        verbose_name = _("Country")
+        verbose_name_plural = _("Countries")
 
 
 
@@ -89,6 +96,14 @@ class City(TimestampedModel):
 
     def __str__(self):
         return f"{self.name}, {self.country.name}"
+    
+    class Meta:
+        verbose_name = _("City")
+        verbose_name_plural = _("Cities")
+
+
+
+
 
 #Intentions Model
 class Intentions(models.Model):
@@ -131,6 +146,16 @@ class Intentions(models.Model):
 
     def __str__(self):
         return self.get_name_display()
+    
+
+    class Meta:
+        verbose_name = _("Intentions")
+        verbose_name_plural = _("Intentions")
+
+
+
+
+
 
 #SupportProviderCategory Model
 class SupportProviderCategory(TimestampedModel):
@@ -172,6 +197,11 @@ class SupportProviderCategory(TimestampedModel):
 
     def __str__(self):
         return self.name
+    
+
+    class Meta:
+        verbose_name = _("Support Provider Category")
+        verbose_name_plural = _("Support Providers Categories")
 
 
 class CommonUserProfile(TimestampedModel):
@@ -259,6 +289,10 @@ class CommonUserProfile(TimestampedModel):
         if self.phone_number:
             return self.phone_number.as_e164
         return None
+    
+    class Meta:
+        verbose_name = _("Common User Profile")
+        verbose_name_plural = _("Common Users Profiles")
 
 
 
@@ -308,6 +342,12 @@ class Civilian(CommonUserProfile):
         return f"{self.user.username} - Civilian"
     
 
+
+    class Meta:
+        verbose_name = _("Civilian")
+        verbose_name_plural = _("Civilians")
+    
+
 def get_default_role_supportprovider():
     return Group.objects.get(name='SupportProvider')
 
@@ -346,6 +386,11 @@ class SupportProvider(CommonUserProfile):
 
     def __str__(self):
         return f"{self.user.username} - SupportProvider"
+    
+
+    class Meta:
+        verbose_name = _("Support Provider")
+        verbose_name_plural = _("Support Providers")
 
 
 
@@ -397,6 +442,10 @@ class Administrator(CommonUserProfile):
 
     def __str__(self):
         return f"{self.user.username} - Administrator"
+    
+    class Meta:
+        verbose_name = _("Administrator")
+        verbose_name_plural = _("Administrators")
 
 
 
@@ -430,7 +479,9 @@ class Language(TimestampedModel):
                SupportProvider.objects.filter(languages_spoken=self, active_until__gte=date.today()).exists() or \
                Administrator.objects.filter(languages_spoken=self, active_until__gte=date.today()).exists()
 
-
+    class Meta:
+        verbose_name = _("Language")
+        verbose_name_plural = _("Languages")
 
 
 # Shelters Model
@@ -512,6 +563,10 @@ class Shelter(TimestampedModel):
         if self.support_provider:
             return self.support_provider.user.email
         return None
+    
+    class Meta:
+        verbose_name = _("Shelter")
+        verbose_name_plural = _("Shelters")
 
 
 
@@ -555,6 +610,11 @@ class UserActivity(TimestampedModel):
         return f"{self.user.username} - {self.activity_type} - {self.timestamp}"
     
 
+    class Meta:
+        verbose_name = _("User Activity")
+        verbose_name_plural = _("User Activities")
+    
+
 
 #UserFeedback Model
 class UserFeedback(TimestampedModel):
@@ -571,6 +631,11 @@ class UserFeedback(TimestampedModel):
 
     def __str__(self):
         return f"{self.user.username} - Feedback at {self.created_at}"
+    
+
+    class Meta:
+        verbose_name = _("User Feedback")
+        verbose_name_plural = _("User Feedbacks")
 
 
 
@@ -629,6 +694,11 @@ class FeedbackResponse(models.Model):
         # Raise all validation errors at once
         if errors:
             raise ValidationError(errors)
+    
+
+    class Meta:
+        verbose_name = _("Feedback Response")
+        verbose_name_plural = _("Feedback Responses")
         
 
 
@@ -663,6 +733,11 @@ class Notification(TimestampedModel):
 
     def __str__(self):
         return f"Notification for {self.recipient.username}: {self.title}"
+    
+
+    class Meta:
+        verbose_name = _("Notification")
+        verbose_name_plural = _("Notifications")
 
 
 
@@ -718,6 +793,11 @@ class AddressLookup(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+    class Meta:
+        verbose_name = _("Addresses Lookup")
+        verbose_name_plural = _("Addresses Lookup")
+
+
 class UserPreference(TimestampedModel):
     """
     Model for storing user-specific preferences and settings.
@@ -752,6 +832,10 @@ class UserPreference(TimestampedModel):
 
         if errors:
             raise ValidationError(errors)
+    
+    class Meta:
+        verbose_name = _("User Preference")
+        verbose_name_plural = _("User Preferences")
         
 
 
@@ -784,6 +868,9 @@ class SearchHistory(TimestampedModel):
 
         if errors:
             raise ValidationError(errors)
+    class Meta:
+        verbose_name = _("Search History")
+        verbose_name_plural = _("Search Histories")
       
 
 class UnauthorizedAccessAttempt(models.Model):
@@ -854,3 +941,91 @@ class UnauthorizedAccessAttempt(models.Model):
     class Meta:
         verbose_name = _("Unauthorized Access Attempt")
         verbose_name_plural = _("Unauthorized Access Attempts")
+
+
+
+class ConfirmationCode(models.Model):
+
+    """
+    Model to store confirmation codes for various user actions such as password changes or account updates.
+    Each code is linked to a specific user and action, and is valid for a limited time period.
+    """
+
+
+    ACTION_TYPES = [
+        ('UpdateCivilian', 'Update Civilian'),
+        ('UpdateSupportProvider', 'Update Support Provider'),
+        ('DeactivateAccount', 'Deactivate Account'),
+        ('UpdatePassword', 'Update Password'),
+    ]
+
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    action_type = models.CharField(max_length=50, choices=ACTION_TYPES)
+
+    def is_valid(self):
+        """
+        Check if the confirmation code is still within its validity period (5 minutes from creation).
+        Returns True if valid, False otherwise.
+        """
+        return timezone.now() < self.created_at + timezone.timedelta(minutes=5)
+
+    @classmethod
+    def generate_code(cls, user, action_type):
+        """
+        Generate a unique 6-digit confirmation code for a given user and action type.
+        Delete any existing codes for the same user and action type before creating a new one.
+        """
+        # Delete existing codes for the same user and action type
+        cls.objects.filter(user=user, action_type=action_type).delete()
+
+        code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        return cls.objects.create(user=user, code=code, action_type=action_type)
+    
+
+
+    @classmethod
+    def delete_expired_codes(cls):
+        """
+        Class method to delete confirmation codes that have expired.
+        """
+        expiration_time = timezone.now() - timezone.timedelta(minutes=5)
+        cls.objects.filter(created_at__lt=expiration_time).delete()
+
+
+
+    def clean(self):
+        """
+        Perform validations on the ConfirmationCode model.
+        """
+        errors = {}
+
+        # User existence check
+        if not self.user_id:
+            errors['user'] = _("User must be specified.")
+
+        # Code format and length validation
+        if not self.code.isdigit() or len(self.code) != 6:
+            errors['code'] = _("Code must be a 6-digit number.")
+
+        # Action type validation
+        valid_action_types = [choice[0] for choice in self.ACTION_TYPES]
+        if self.action_type not in valid_action_types:
+            errors['action_type'] = _("Invalid action type.")
+
+        # Raise all validation errors at once
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        """
+        Override the save method to include the custom clean method for additional validations.
+        """
+        self.full_clean()
+        return super(ConfirmationCode, self).save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = _("Confirmation Code")
+        verbose_name_plural = _("Confirmation Codes")
