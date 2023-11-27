@@ -1,8 +1,10 @@
 import logging
 from django.utils import timezone
+from django.contrib.auth.models import User
 from django.db.models import Model, QuerySet
 from typing import  Type,  Optional,  List,  Any
 from django.core.exceptions import ObjectDoesNotExist 
+
 
 
 
@@ -79,28 +81,22 @@ class DAL:
 
         
 
-        
+    
 
     def get_or_create(self, model, defaults=None, **kwargs):
-
-        """
-        Retrieve an existing instance of a model or create it if it does not exist.
-        This method first tries to retrieve a model instance based on the provided criteria.
-        If an instance is found, it is returned. Otherwise, a new instance is created with the given defaults.
-
-        :param model: The model class to operate on.
-        :param defaults: A dictionary of attributes to set on the model instance if it needs to be created.
-        :param kwargs: The attributes to filter by when retrieving the model instance.
-        :return: A tuple (instance, created), where 'instance' is the retrieved or created model instance, and 'created' is a boolean indicating whether a new instance was created.
-        """
-
         try:
-            # Log the start of the get_or_create operation
             logger.info(f"Starting get_or_create operation for {model.__name__} with criteria {kwargs} and defaults {defaults}")
 
-            instance, created = model.objects.get_or_create(defaults=defaults, **kwargs)
+            # Special handling for User model
+            if model == User and 'password' in kwargs:
+                password = kwargs.pop('password')
+                instance, created = model.objects.get_or_create(defaults=defaults, **kwargs)
+                if created:
+                    instance.set_password(password)
+                    instance.save()
+            else:
+                instance, created = model.objects.get_or_create(defaults=defaults, **kwargs)
 
-            # Log the outcome of the operation
             if created:
                 logger.info(f"Created a new instance of {model.__name__}")
             else:
@@ -108,37 +104,31 @@ class DAL:
 
             return instance, created
         except Exception as e:
-            # Log any other exceptions
             logger.error(f"get_or_create - Error during operation on {model.__name__}: {str(e)}")
             return None, False
 
 
 
-
-
-
+    
     def create(self, model: Type[Model], **kwargs) -> Optional[Model]:
-
         """
         Create an instance of a model with the provided attributes.
-        :param model: The model class to create an instance of.
-        :param kwargs: The attributes to set on the new instance.
-        :return: The newly created model instance or None if creation failed.
+        For the User model, encrypt the password using set_password.
         """
-
         try:
-            # Log the start of the creation operation
-            logger.info(f"Starting creation operation for a new instance of {model.__name__} with attributes {kwargs}")
+            logger.info(f"Creating a new instance of {model.__name__}")
 
-            new_instance = model.objects.create(**kwargs)
+            # Special handling for the User model
+            if model == User:
+                user = model(**kwargs)
+                user.set_password(kwargs['password'])
+                user.save()
+                return user
 
-            # Log the successful creation of the instance
-            logger.info(f"Successfully created a new instance of {model.__name__}")
-
-            return new_instance
+            # Standard creation for other models
+            return model.objects.create(**kwargs)
         except Exception as e:
-            # Log the error encountered during creation
-            logger.error(f"create - Error during creation of {model.__name__}: {str(e)}")
+            logger.error(f"Error during creation of {model.__name__}: {str(e)}")
             return None
 
 
