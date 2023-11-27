@@ -85,11 +85,10 @@ def create_shelter_signal(sender, instance, created, **kwargs):
 
 
 
-
 @receiver(post_save, sender=User)
 def account_activation_notification(sender, instance, created, **kwargs):
     """
-    Send an account activation notification to all users upon the activation of their account.
+    Send an account activation notification to users upon the activation of their account.
 
     This method is enhanced with logging to track its execution. 
     It logs when an attempt is made to send an account activation notification 
@@ -102,17 +101,20 @@ def account_activation_notification(sender, instance, created, **kwargs):
     :param kwargs: Additional keyword arguments.
     """
     try:
-        # Check if the account is newly created and active
-        if created and instance.is_active:
+        # Check if the account is newly created or if the is_active status is changed to True
+        if (created and instance.is_active) or (not created and instance.is_active):
             # Log the initiation of the email sending process
             logger.info(f"Attempting to send account activation email to: {instance.email}")
 
+            subject = 'Account Activated' if instance.is_active else 'Account Deactivated'
+            body = f'Your account {instance.username} has been activated. Please login again, thank you.' if instance.is_active else f'Your account {instance.username} has been deactivated.'
+
             message = EmailMessage(
-            subject='Account Activated',
-            body=f'Your account {instance.username} has been activated. Please login again, thank you.',
-            from_email='Rachel.for.Israel@gmail.com',
-            to=[instance.email],  # Ensure this is a list
-        )
+                subject=subject,
+                body=body,
+                from_email='Rachel.for.Israel@gmail.com',
+                to=[instance.email],  # Ensure this is a list
+            )
             message.send()
 
             # Log the successful email sending
@@ -121,6 +123,7 @@ def account_activation_notification(sender, instance, created, **kwargs):
     except Exception as e:
         # Log the exception and handle accordingly
         logger.error(f"Error in account_activation_notification for {instance.email}: {e}")
+
 
 
 
