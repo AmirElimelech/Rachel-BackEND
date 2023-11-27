@@ -1,11 +1,16 @@
 import logging
 from .DAL import DAL
+from PIL import Image
+from io import BytesIO
 from Rachel.models import Country
 from axes.models import AccessAttempt
 from django.core.mail import send_mail
 from django.contrib.auth.models import Group
 from axes.helpers import get_client_ip_address
 from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+from django.core.files.uploadedfile import InMemoryUploadedFile
+
 
 
 
@@ -76,7 +81,7 @@ def alert_for_suspicious_activity(username, request=None):
         logger.info(f"Total login failures from IP {ip_address}: {total_failures}")
 
         # Alert if the number of attempts exceeds the threshold
-        if total_failures > SUSPICIOUS_ATTEMPT_THRESHOLD:
+        if total_failures >= SUSPICIOUS_ATTEMPT_THRESHOLD:
             # Get all administrators' emails
             admin_group = dal.get_by_field(Group, name='Administrator')
             if admin_group:
@@ -148,3 +153,74 @@ def clean_phone_number(country_id, phone_number):
     full_phone_number = f"+{country_instance.phone_code}{phone_number}" if country_instance else phone_number
 
     return full_phone_number
+
+
+
+
+def validate_image(image, max_size_mb=2, resize_target=None):
+    """
+    Validates and resizes an image file.
+
+    :param image: InMemoryUploadedFile, the image to be validated and resized.
+    :param max_size_mb: int, maximum file size in MB.
+    :param resize_target: tuple, target size (width, height) for resizing.
+    :return: InMemoryUploadedFile, the processed image.
+    """
+    errors = {}
+    allowed_extensions = [
+        'jpg', 'jpeg', 'jfif', 'pjpeg', 'pjp',
+        'png', 'gif', 'webp', 'tif', 'tiff', 'bmp', 'dib',
+        'ico', 'svg', 'heif', 'heifs', 'heic', 'heics'
+    ]
+
+    extension = image.name.split('.')[-1].lower()
+    if extension not in allowed_extensions:
+        errors['extension'] = _("Unsupported file format. Allowed formats: jpg, jpeg, png, etc.")
+
+    if image.size > max_size_mb * 1024 * 1024:
+        if resize_target is not None:
+            image = resize_image(image, resize_target)
+        else:
+            errors['size'] = _("The image file is too large. Maximum size allowed is {} MB.").format(max_size_mb)
+
+    if errors:
+        raise ValidationError(errors)
+    
+    return image
+
+
+
+
+
+
+def resize_image(image, resize_target):
+    """
+    Resizes an image to a target size. Assumes basic validation has been performed.
+
+    :param image: InMemoryUploadedFile, the image to be resized.
+    :param resize_target: tuple, target size (width, height) for resizing.
+    :return: InMemoryUploadedFile, the resized image.
+    """
+    errors = {}
+
+    if not image or not isinstance(image, InMemoryUploadedFile):
+        errors['image'] = _("Invalid image file.")
+
+    if not resize_target or not (isinstance(resize_target, tuple) and len(resize_target) == 2):
+        errors['resize_target'] = _("Invalid resize target. Must be a tuple with two elements (width, height).")
+
+    if errors:
+        raise ValidationError(errors)
+
+    # Proceed with resizing the image
+    image_temp = Image.open(image)
+    image_temp.thumbnail(resize_target, Image.ANTIALIAS)
+
+    image_io = BytesIO()
+    image_temp.save(image_io, format=image.format)
+
+    new_image = InMemoryUploadedFile(
+        image_io, None, image.name, 'image/jpeg', image_io.tell(), None
+    )
+
+    return new_image
