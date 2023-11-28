@@ -773,6 +773,7 @@ class AddressLookup(TimestampedModel):
     display_name = models.TextField()
     boundingbox = models.JSONField()
 
+
     def clean(self):
         """Validate the AddressLookup data."""
         super().clean()
@@ -819,6 +820,7 @@ class UserPreference(TimestampedModel):
     language_preference = models.CharField(max_length=100, default='English')
     email_updates = models.BooleanField(default=True)
 
+
     def __str__(self):
         return f"{self.user.username}'s Preferences"
 
@@ -854,6 +856,7 @@ class SearchHistory(TimestampedModel):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     query = models.CharField(max_length=255)
+
 
     def __str__(self):
         return f"{self.user.username} - {self.query} - {self.created_at}"
@@ -896,6 +899,7 @@ class UnauthorizedAccessAttempt(models.Model):
     browser = models.CharField(max_length=255, blank=True, verbose_name=_("Browser"))
     operating_system = models.CharField(max_length=255, blank=True, verbose_name=_("Operating System"))
     country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Country"))
+
 
     def __str__(self):
         return f"Unauthorized access attempt on {self.user.email} from IP: {self.ip_address}"
@@ -965,6 +969,7 @@ class ConfirmationCode(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     action_type = models.CharField(max_length=50, choices=ACTION_TYPES)
 
+
     def is_valid(self):
         """
         Check if the confirmation code is still within its validity period (5 minutes from creation).
@@ -1029,3 +1034,23 @@ class ConfirmationCode(models.Model):
     class Meta:
         verbose_name = _("Confirmation Code")
         verbose_name_plural = _("Confirmation Codes")
+
+
+class PasswordResetRequest(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    token_used = models.BooleanField(default=False)  # Indicates if the reset token has been used
+    request_count = models.IntegerField(default=0)   # Tracks the number of reset requests
+
+
+    def __str__(self):
+        return f"Password Reset Request for {self.user.username} at {self.timestamp}"
+
+    def increment_request_count(self):
+        """Increment the request count and save the model."""
+        self.request_count += 1
+        self.save()
+
+    class Meta:
+        verbose_name = _("Password Reset Request")
+        verbose_name_plural = _("Password Reset Requests")
