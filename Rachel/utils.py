@@ -2,20 +2,16 @@ import logging
 from .DAL import DAL
 from PIL import Image
 from io import BytesIO
-from Rachel.models import Country
 from axes.models import AccessAttempt
 from django.core.mail import send_mail
 from django.contrib.auth.models import Group
 from axes.helpers import get_client_ip_address
+from django.utils.crypto import get_random_string
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from Rachel.models import Country , PasswordResetRequest
 from django.core.files.uploadedfile import InMemoryUploadedFile
-
-
-
-
-
-
+from django.contrib.auth.password_validation import validate_password
 
 
 
@@ -224,3 +220,122 @@ def resize_image(image, resize_target):
     )
 
     return new_image
+
+
+
+
+
+def request_password_reset(user):
+
+    """
+    Initiates the password reset process for a given user.
+
+    Args:
+        user: User instance for whom the password reset is requested.
+    """
+
+    # Generate a random token
+    token = get_random_string(length=32)
+
+    # Retrieve or create a password reset request record
+    reset_request, created = dal.get_or_create(
+        PasswordResetRequest, 
+        user=user, 
+        defaults={'token_used': False, 'request_count': 1}
+    )
+
+    if not created:
+        reset_request.request_count += 1
+        dal.update(reset_request, request_count=reset_request.request_count)
+
+    # Send the password reset email with the token
+    send_mail(
+        'Password Reset Request',
+        f'Your password reset token is {token}.',
+        'Rachel.for.Israel@gmail.com',
+        [user.email],
+        fail_silently=False,
+    )
+
+    # Log the sending of the email
+    logger.info(f"Password reset email sent to {user.email}")
+
+    return token
+
+
+def can_request_password_reset(user):
+    """
+    Checks if the user can request a password reset.
+
+    Args:
+        user: User instance to check for password reset request eligibility.
+
+    Returns:
+        bool: True if the user can request a password reset, False otherwise.
+    """
+    MAX_ATTEMPTS = 5  # Maximum number of attempts allowed
+    try:
+        reset_request = dal.get_by_field(PasswordResetRequest, user=user)
+
+        if reset_request:
+            can_reset = reset_request.request_count < MAX_ATTEMPTS and not reset_request.token_used
+            logger.info(f"Password reset check for user {user.username}: Request count - {reset_request.request_count}, Can reset - {can_reset}")
+            return can_reset
+        else:
+            logger.info(f"No existing password reset request for user {user.username}. User can request password reset.")
+            return True
+    
+    except PasswordResetRequest.DoesNotExist:
+        logger.error(f"PasswordResetRequest does not exist for user: {user.username}. User can request password reset.")
+        return True
+
+
+
+
+def finalize_password_reset(user, token, new_password):
+    """
+    Finalizes the password reset process for a given user.
+
+    Args:
+        user: User instance resetting their password.
+        token: The token received for password reset.
+        new_password: The new password set by the user.
+
+    Raises:
+        ValidationError: If the token is invalid or has already been used.
+    """
+    try:
+        # Retrieve the password reset request record
+        reset_request = dal.get_by_field(PasswordResetRequest, user=user, token=token)
+
+        # Check if the token is valid and has not been used
+        if reset_request.token_used:
+            logger.error(f"Attempt to use an already used token for user: {user.username}")
+            raise ValidationError("This token has already been used.")
+
+        # Update the user's password
+        validate_password(new_password, user=user)  # Validate the new password
+        user.set_password(new_password)
+        user.save()
+        logger.info(f"Password successfully reset for user: {user.username}")
+
+        # Mark the reset token as used
+        dal.update(reset_request, token_used=True)
+
+        # Send a confirmation email to the user
+        send_mail(
+            'Your Password Has Been Reset',
+            'Your password has been successfully reset. If this was not you, please contact our support team immediately.',
+            'Rachel.for.Israel@gmail.com',
+            [user.email],
+            fail_silently=False,
+        )
+        logger.info(f"Password reset confirmation email sent to {user.email}")
+
+    except PasswordResetRequest.DoesNotExist:
+        logger.error(f"Password reset attempt with invalid token for user: {user.username}")
+        raise ValidationError("Invalid password reset token.")
+    except ValidationError as e:
+        # Handle any validation errors
+        logger.error(f"Error in password validation during reset for user: {user.username}: {e}")
+        raise
