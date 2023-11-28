@@ -4,8 +4,10 @@ from django import forms
 from django.core.mail import send_mail
 from django.utils.translation import gettext as _
 from django.core.exceptions import ValidationError
-from django.core.validators import MinLengthValidator
+from django.contrib.auth.forms import SetPasswordForm
+from django.core.validators import  MinLengthValidator
 from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth.password_validation import validate_password
 
 
 
@@ -154,3 +156,37 @@ class DeactivateForm(forms.Form):
             logger.error(f"Error logging deactivation confirmation for user: {self.user.username}. Error: {e}")
 
         return confirm
+    
+class PasswordResetForm(SetPasswordForm):
+    """
+    A form for resetting a user's password. This form is used in the password reset
+    process when the user has clicked on a password reset link and entered a new password.
+    It validates that the password meets Django's set criteria and ensures that the
+    password entries match.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(PasswordResetForm, self).__init__(*args, **kwargs)
+        self.fields['new_password1'].validators.append(validate_password)
+        self.fields['new_password2'].validators.append(validate_password)
+
+    def clean_new_password2(self):
+        password1 = self.cleaned_data.get('new_password1')
+        password2 = self.cleaned_data.get('new_password2')
+        if password1 and password2:
+            if password1 != password2:
+                logger.warning("Password reset attempt failed due to mismatched passwords.")
+                raise ValidationError(_("The two password fields didn't match."))
+            validate_password(password2)
+        return password2
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if commit:
+            user.save()
+            logger.info(f"Password successfully reset for user: {user.username}")
+        return user
+
+
+
+
