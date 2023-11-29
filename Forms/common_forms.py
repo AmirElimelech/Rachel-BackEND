@@ -121,18 +121,21 @@ class CustomChangePasswordForm(PasswordChangeForm):
 
 
 class DeactivateForm(forms.Form):
-
     """
     A form to handle account deactivation confirmation.
 
     Fields:
         confirm (BooleanField): A checkbox to confirm the user's intention to deactivate the account.
     """
-    
+
     confirm = forms.BooleanField(
         label="I confirm that I want to deactivate my account",
         required=True
     )
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super(DeactivateForm, self).__init__(*args, **kwargs)
 
     def clean_confirm(self):
         """
@@ -146,17 +149,18 @@ class DeactivateForm(forms.Form):
         confirm = self.cleaned_data.get('confirm')
 
         if not confirm:
-            raise forms.ValidationError("You must confirm to proceed with deactivation.")
+            raise ValidationError("You must confirm to proceed with deactivation.")
 
-        try:
-            # Additional logging for deactivation confirmation
+        if self.user:
             logger.info(f"Account deactivation confirmed for user: {self.user.username}")
-        except Exception as e:
-            # Handle any potential logging errors gracefully
-            logger.error(f"Error logging deactivation confirmation for user: {self.user.username}. Error: {e}")
+        else:
+            logger.warning("Deactivation confirmation attempted without a user context.")
 
         return confirm
     
+
+
+
 class PasswordResetForm(SetPasswordForm):
     """
     A form for resetting a user's password. This form is used in the password reset
