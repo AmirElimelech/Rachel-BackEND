@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import update_session_auth_hash
 from Forms.support_provider_forms import SupportProviderUpdateForm
 from Forms.common_forms import CustomChangePasswordForm , DeactivateForm
-from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity , User , Civilian , SupportProvider
+from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity , User , Civilian , SupportProvider, UserPreference
 
 
 
@@ -192,64 +192,6 @@ class BaseFacade:
     
 
 
-    # def update_profile(self, user, profile_data, request):
-
-    #     """
-    #     Updates a user's profile with the given data.
-
-    #     Args:
-    #         user (User): The user instance whose profile is to be updated.
-    #         profile_data (dict): A dictionary containing the profile data to be updated.
-    #         request: The HTTP request object, used to get the user's IP address.
-
-    #     Raises:
-    #         ValidationError: If an error occurs during the update process.
-
-    #     Returns:
-    #         bool: True if the profile update is successful, otherwise raises an exception.
-    #     """
-
-    #     try:
-    #         with transaction.atomic():
-    #             # Update user fields if present in profile_data
-    #             if 'email' in profile_data:
-    #                 user.email = profile_data['email']
-    #             if 'first_name' in profile_data:
-    #                 user.first_name = profile_data['first_name']
-    #             if 'last_name' in profile_data:
-    #                 user.last_name = profile_data['last_name']
-
-    #             user.save()
-
-    #             # Update specific profile fields for Civilian or SupportProvider
-    #             if hasattr(user, 'civilian'):
-    #                 civilian_profile = user.civilian
-    #                 if 'address' in profile_data:
-    #                     civilian_profile.address = profile_data['address']
-    #                 if 'phone_number' in profile_data:
-    #                     civilian_profile.phone_number = profile_data['phone_number']
-    #                 civilian_profile.save()
-
-    #             elif hasattr(user, 'supportprovider'):
-    #                 support_provider_profile = user.supportprovider
-    #                 if 'address' in profile_data:
-    #                     support_provider_profile.address = profile_data['address']
-    #                 if 'phone_number' in profile_data:
-    #                     support_provider_profile.phone_number = profile_data['phone_number']
-    #                 support_provider_profile.save()
-
-    #             # Log the profile update
-    #             user_ip = get_client_ip_address(request)
-    #             self.dal.create(UserActivity, user=user, activity_type='profile_update', ip_address=user_ip)
-    #             logger.info(f"Profile updated for user: {user.username} from IP: {user_ip}")
-
-    #     except Exception as e:
-    #         logger.error(f"Error in update_profile for user {user.username}: {e}", exc_info=True)
-    #         raise ValidationError("An error occurred during the profile update.")
-
-    #     return True
-
-
 
     def update_profile(self, user_id, profile_data, request):
 
@@ -307,3 +249,56 @@ class BaseFacade:
             logger.warning(f"Profile update unsuccessful for user_id: {user_id}")
 
         return update_successful  # Return the variable at the end
+    
+
+
+
+    def user_preferences(self, user_id, preferences_data=None, request=None):
+
+        """
+        Retrieves or updates the preferences for a given user.
+
+        Args:
+            user_id (int): The ID of the user whose preferences are to be managed.
+            preferences_data (dict, optional): The data to update the user's preferences with.
+                If None, the method retrieves the current preferences.
+            request: The HTTP request object, used to get the user's IP address.
+
+        Returns:
+            dict or bool: The user's preferences if preferences_data is None, or True if the update is successful.
+
+        Raises:
+            ValidationError: If an error occurs during processing.
+        """
+        
+        operation_successful = False  # Flag to track success of the operation
+
+        try:
+            user_preferences = self.dal.get_by_field(UserPreference, user_id=user_id)
+
+            if preferences_data is None:
+                if user_preferences:
+                    return vars(user_preferences)  # Return all user preferences attributes
+                return {}
+
+            user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0') if request else '0.0.0.0'
+            if user_preferences:
+                self.dal.update(user_preferences, **preferences_data)
+                operation_successful = True
+            else:
+                preferences_data['user_id'] = user_id
+                self.dal.create(UserPreference, **preferences_data)
+                operation_successful = True
+
+            if operation_successful:
+                self.dal.create(UserActivity, user_id=user_id, activity_type='preferences_updated', ip_address=user_ip)
+                logger.info(f"User preferences updated for user_id: {user_id}, IP: {user_ip}")
+
+        except ValidationError as e:
+            logger.error(f"Validation error in user_preferences for user_id {user_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in user_preferences for user_id {user_id}: {e}")
+            raise ValidationError("An unexpected error occurred.")
+
+        return operation_successful
