@@ -13,9 +13,8 @@ from django.core.exceptions import  ValidationError
 from django.utils.http import  urlsafe_base64_encode
 from django.contrib.auth import  authenticate, login
 from django.utils.translation import gettext_lazy as  _
-from django.contrib.auth.tokens import default_token_generator
 from Rachel.utils import alert_for_suspicious_activity , request_password_reset , can_request_password_reset
-from Rachel.models import City , Country , Language , SupportProvider , Civilian , Intentions , SupportProviderCategory 
+from Rachel.models import City , Country , Language , SupportProvider , Civilian , Intentions , SupportProviderCategory ,UserActivity
 
 
 
@@ -36,7 +35,45 @@ class AnonymousFacade:
 
 
     
-    def register_user(self, user_type, username, email, password, identification_number, id_type, country_of_issue_id, languages_spoken_ids, city_id, country_id, phone_number, terms_accepted, profile_picture, address, gender=None, support_provider_categories_ids=None, looking_to_earn=None, **extra_fields):
+    def register_user(self, request, user_type, username, email, password, identification_number, id_type, country_of_issue_id, languages_spoken_ids, city_id, country_id, phone_number, terms_accepted, profile_picture, address, gender=None, support_provider_categories_ids=None, looking_to_earn=None, **extra_fields):
+        
+        """
+        Registers a new user, either a civilian or a support provider, with comprehensive personal and identification details.
+
+        This method performs several checks for data uniqueness (like username, email, phone number, and identification number), handles user creation, and sets up additional profile details specific to the user type. It also logs the user's IP address and activities related to account creation.
+
+        Args:
+        request: The HTTP request object, used for obtaining the user's IP address.
+        user_type (str): The type of the user ('civilian' or 'support_provider').
+        username (str): The chosen username for the user.
+        email (str): The user's email address.
+        password (str): The user's chosen password.
+        identification_number (str): A unique identification number for the user.
+        id_type (str): The type of the provided identification.
+        country_of_issue_id (int): ID of the country that issued the user's identification.
+        languages_spoken_ids (list of int): IDs of the languages the user speaks.
+        city_id (int): The ID of the city where the user resides.
+        country_id (int): The ID of the country where the user resides.
+        phone_number (str): The user's phone number.
+        terms_accepted (bool): Whether the user has accepted terms and conditions.
+        profile_picture (File/Image): The user's profile picture.
+        address (str): The user's physical address.
+        gender (str, optional): The gender of the user. Only required for 'civilian' user type.
+        support_provider_categories_ids (list of int, optional): Categories of interest for 'support_provider' user type.
+        looking_to_earn (bool, optional): Indicates if the support provider is looking to earn through the platform.
+        extra_fields (dict): Any additional fields relevant for user registration.
+
+        Returns:
+            User: The created User object if successful; None if unsuccessful due to invalid user type.
+
+        Raises:
+        ValidationError: If there are any issues with the input data or if the registration process fails due to data validation.
+        Exception: For any unexpected errors during the registration process.
+        """
+        
+        
+        
+        user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
         logger.info("Processing user registration request")
 
         errors = {}
@@ -87,6 +124,8 @@ class AnonymousFacade:
                 logger.info(f"User info approved, registering user {username}!")
                 user = self.dal.create(User, **user_data)
                 logger.info(f"User {username} registered successfully")
+                
+
 
 
         
@@ -145,6 +184,9 @@ class AnonymousFacade:
                     errors['user_type'] = _("Invalid user type provided. Expected 'civilian' or 'support_provider'.")
                     logger.error(f"Invalid user type provided: {user_type}")
                     raise ValidationError(errors)
+                
+                if user:
+                    self.dal.create(UserActivity, user=user, activity_type='account_creation', ip_address=user_ip)
 
         except ValidationError as e:
             logger.warning(f"Validation error during registration: {e}")
@@ -199,11 +241,15 @@ class AnonymousFacade:
             # Generate or retrieve the authentication token
             token, _ = Token.objects.get_or_create(user=authenticated_user)
             logger.info(f"User {username} logged in successfully")
+            self.dal.create(UserActivity, user=authenticated_user, activity_type='login', ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'))
+
             return token.key
         else:
-            # Log and handle failed login attempt
-            logger.warning(f"Failed login attempt for username: {username}")
-            alert_for_suspicious_activity(username, request)
+            if user:
+                self.dal.create(UserActivity, user=user, activity_type='login_failed', ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'))
+                # Log and handle failed login attempt
+                logger.warning(f"Failed login attempt for username: {username}")
+                alert_for_suspicious_activity(username, request)
             raise ValidationError("Invalid username or password")
         
 
@@ -262,16 +308,19 @@ class AnonymousFacade:
 
 
 
-    def reset_password(self, email):
+    def reset_password(self, request, email):
+
         """
         Initiates the password reset process for a user.
 
         Args:
+            request: The HTTP request object, used to get the user's IP address.
             email (str): The email of the user who wants to reset their password.
 
         Raises:
             ValidationError: If the email does not exist or other errors occur.
         """
+        
         try:
             # Check if the user exists and can request a password reset
             user = self.dal.get_by_field(User, email=email)
@@ -284,7 +333,7 @@ class AnonymousFacade:
                 raise Exception("Password reset limit reached. Please contact support.")
 
             # Use the request_password_reset function
-            token = request_password_reset(user)
+            token = request_password_reset(user, request)
 
             # Encode the user's ID
             uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -303,6 +352,7 @@ class AnonymousFacade:
                 fail_silently=False,
             )
 
+          
             logger.info("Password reset email sent successfully")
 
         except Exception as e:
