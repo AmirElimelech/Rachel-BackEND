@@ -591,7 +591,7 @@ class UserActivity(TimestampedModel):
         ('account_activated', _('Account Activated')),
         ('account_deactivated', _('Account Deactivated')),
         ('password_change', _('Password Change')),
-        ('profile_update', _('Profile Update')),
+        ('profile_updated', _('Profile Updated')),
         ('login_failed', _('Failed Login Attempt')),
         ('account_creation', _('Account Creation')),
         ('password_reset_request', _('Password Reset Request')),
