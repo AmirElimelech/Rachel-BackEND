@@ -6,14 +6,12 @@ from axes.models import AccessAttempt
 from django.core.mail import send_mail
 from django.contrib.auth.models import Group
 from axes.helpers import get_client_ip_address
+from Forms.common_forms import PasswordResetForm
 from django.utils.crypto import get_random_string
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from Rachel.models import Country , PasswordResetRequest
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from django.contrib.auth.password_validation import validate_password
-
-
+from Rachel.models import Country , PasswordResetRequest , UserActivity
 
 
 SUSPICIOUS_ATTEMPT_THRESHOLD = 5
@@ -225,7 +223,7 @@ def resize_image(image, resize_target):
 
 
 
-def request_password_reset(user):
+def request_password_reset(user, request):
 
     """
     Initiates the password reset process for a given user.
@@ -258,7 +256,16 @@ def request_password_reset(user):
     )
 
     # Log the sending of the email
+    
     logger.info(f"Password reset email sent to {user.email}")
+
+
+    # Get the user's IP address from the request object
+    user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+
+    # Add UserActivity log here
+    dal.create(UserActivity, user=user, activity_type='password_reset_request', ip_address=user_ip)
+
 
     return token
 
@@ -292,14 +299,14 @@ def can_request_password_reset(user):
 
 
 
-def finalize_password_reset(user, token, new_password):
+def finalize_password_reset(user, token, request_data):
     """
     Finalizes the password reset process for a given user.
 
     Args:
         user: User instance resetting their password.
         token: The token received for password reset.
-        new_password: The new password set by the user.
+        request_data: POST data from the request, containing the new password.
 
     Raises:
         ValidationError: If the token is invalid or has already been used.
@@ -309,33 +316,38 @@ def finalize_password_reset(user, token, new_password):
         reset_request = dal.get_by_field(PasswordResetRequest, user=user, token=token)
 
         # Check if the token is valid and has not been used
-        if reset_request.token_used:
+        if reset_request and reset_request.token_used:
             logger.error(f"Attempt to use an already used token for user: {user.username}")
             raise ValidationError("This token has already been used.")
 
-        # Update the user's password
-        validate_password(new_password, user=user)  # Validate the new password
-        user.set_password(new_password)
-        user.save()
-        logger.info(f"Password successfully reset for user: {user.username}")
+        # Initialize the PasswordResetForm with the user and POST data
+        form = PasswordResetForm(user, request_data)
+        if form.is_valid():
+            form.save(commit=True)  # This saves the new password
+            dal.update(reset_request, token_used=True)  # Mark the token as used
 
-        # Mark the reset token as used
-        dal.update(reset_request, token_used=True)
+            # Send a confirmation email to the user
+            send_mail(
+                'Your Password Has Been Reset',
+                'Your password has been successfully reset. If this was not you, please contact our support team immediately.',
+                'Rachel.for.Israel@gmail.com',
+                [user.email],
+                fail_silently=False,
+            )
+            logger.info(f"Password reset confirmation email sent to {user.email}")
 
-        # Send a confirmation email to the user
-        send_mail(
-            'Your Password Has Been Reset',
-            'Your password has been successfully reset. If this was not you, please contact our support team immediately.',
-            'Rachel.for.Israel@gmail.com',
-            [user.email],
-            fail_silently=False,
-        )
-        logger.info(f"Password reset confirmation email sent to {user.email}")
+            # Log the user's activity
+            user_ip = request_data.META.get('REMOTE_ADDR', '0.0.0.0')
+            dal.create(UserActivity, user=user, activity_type='password_reset_completed', ip_address=user_ip)
+
+        else:
+            # If the form is not valid, raise a ValidationError
+            raise ValidationError("Invalid form data")
 
     except PasswordResetRequest.DoesNotExist:
         logger.error(f"Password reset attempt with invalid token for user: {user.username}")
         raise ValidationError("Invalid password reset token.")
     except ValidationError as e:
-        # Handle any validation errors
-        logger.error(f"Error in password validation during reset for user: {user.username}: {e}")
+        # Handle any other validation errors
+        logger.error(f"Error in password reset process for user {user.username}: {e}")
         raise
