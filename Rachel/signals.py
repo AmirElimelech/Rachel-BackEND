@@ -6,6 +6,7 @@ from django.dispatch import receiver
 from django.core.mail import send_mail
 from django.core.mail import EmailMessage
 from django.db.models.signals import post_save
+from axes.helpers import get_client_ip_address
 from django.contrib.auth import  get_user_model
 from .utils import alert_for_suspicious_activity
 from .models import User, Shelter, UserActivity , Group , SupportProvider ,Civilian
@@ -102,7 +103,10 @@ def account_activation_notification(sender, instance, created, **kwargs):
     """
     try:
         # Check if the account is newly created or if the is_active status is changed to True
-        if (created and instance.is_active) or (not created and instance.is_active):
+        # if (created and instance.is_active) or (not created and instance.is_active):
+        update_fields = kwargs.get('update_fields')
+        if created or (update_fields is not None and 'is_active' in update_fields):
+
             # Log the initiation of the email sending process
             logger.info(f"Attempting to send account activation email to: {instance.email}")
 
@@ -116,6 +120,15 @@ def account_activation_notification(sender, instance, created, **kwargs):
                 to=[instance.email],  # Ensure this is a list
             )
             message.send()
+
+
+            request = kwargs.get('request')
+            user_ip = request.META.get('REMOTE_ADDR') if request else '0.0.0.0'
+
+            # Record the activity
+            activity_type = 'account_activated' if instance.is_active else 'account_deactivated'
+            dal.create(UserActivity, user=instance, activity_type=activity_type, ip_address=user_ip)
+
 
             # Log the successful email sending
             logger.info(f"Account activation email successfully sent to: {instance.email}")
@@ -144,6 +157,14 @@ def profile_update_notification(sender, instance, created, **kwargs):
                 fail_silently=False,
             )
 
+
+            # Obtain IP address
+            request = kwargs.get('request')
+            user_ip = request.META.get('REMOTE_ADDR') if request else '0.0.0.0'
+
+            # Record the activity
+            dal.create(UserActivity, user=instance.user, activity_type='profile_updated', ip_address=user_ip)
+
             logger.info(f"Profile update notification email sent to: {instance.user.email}")
 
         except Exception as e:
@@ -170,9 +191,10 @@ def track_user_login(sender, request, user, **kwargs):
     """
 
     try:
-        # Use DAL to create a record of the user's login activity
-        dal.create(UserActivity, user=user, activity_type='login', ip_address=request.META.get('REMOTE_ADDR', ''))
 
+        user_ip = get_client_ip_address(request)
+        dal.create(UserActivity, user=user, activity_type='login', ip_address=user_ip)
+        
         # Optionally, log the tracking of the login
         logger.info(f"Logged in user: {user.username} from IP: {request.META.get('REMOTE_ADDR', '')}")
     except Exception as e:
@@ -197,13 +219,19 @@ def track_user_logout(sender, request, user, **kwargs):
     """
     try:
         # Use DAL to create a record of the user's logout activity
-        dal.create(UserActivity, user=user, activity_type='logout', ip_address=request.META.get('REMOTE_ADDR', ''))
+        logger.info("Creating UserActivity of track user logout")
+        user_ip = get_client_ip_address(request)
+        dal.create(UserActivity, user=user, activity_type='logout', ip_address=user_ip)
 
         # Optionally, log the tracking of the logout
         logger.info(f"Logged out user: {user.username} from IP: {request.META.get('REMOTE_ADDR', '')}")
     except Exception as e:
-        # Log the exception and handle accordingly
+        # Log the exception and handle accordingly)
         logger.error(f"Error in track_user_logout: {e}")
+
+
+
+
 
 
 
@@ -213,7 +241,6 @@ def track_user_logout(sender, request, user, **kwargs):
 def send_welcome_email(sender, instance, created, **kwargs):
     """
     Send a welcome email to new users upon their creation.
-
     This method is enhanced with logging to track its execution. 
     It logs when an attempt is made to send a welcome email and reports 
     success or failure, providing visibility into the email sending process 
@@ -240,14 +267,25 @@ def send_welcome_email(sender, instance, created, **kwargs):
             # Log the successful email sending
             logger.info(f"Welcome email successfully sent to: {instance.email}")
 
+            # Obtain the IP address directly from the request object
+            request = kwargs.get('request')
+            user_ip = request.META.get('REMOTE_ADDR') if request else '0.0.0.0'
+            
+            # Record the email sending in UserActivity
+            dal.create(UserActivity, user=instance, activity_type='welcome_email_sent', ip_address=user_ip)
+            logger.info(f"UserActivity recorded for sending welcome email to: {instance.username}")
+
     except Exception as e:
         # Log the exception and handle accordingly
         logger.error(f"Error in send_welcome_email for {instance.email}: {e}")
 
 
+
+
+
+
 @receiver(user_login_failed)
 def on_user_login_failed(sender, credentials, request=None, **kwargs):
-
     """
     This function acts as a signal receiver for failed login attempts. It processes the credentials
     provided during the login attempt to identify the user and logs relevant information about the failure.
@@ -282,8 +320,24 @@ def on_user_login_failed(sender, credentials, request=None, **kwargs):
         # Log the username associated with the failed login attempt
         logger.info(f"Login failed for user: {username}")
 
+        # Attempt to retrieve the User instance
+        user_instance = None
+        if username != 'unknown':
+            user_instance = get_user_model().objects.filter(username=username).first()
+
+        # Only proceed if a user instance is found
+        if user_instance and request:
+            dal.create(UserActivity, user=user_instance, activity_type='login_failed', ip_address=request.META.get('REMOTE_ADDR', ''))
+            logger.info(f"Recorded failed login attempt for user: {user_instance.username} from IP: {request.META.get('REMOTE_ADDR', '')}")
+        else:
+            logger.info(f"User instance not found or request is None for username: {username}")
+
         # Log the failed login attempt, check for suspicious activity, and alert if necessary
         alert_for_suspicious_activity(username, request)
+
     except Exception as e:
         # Log the exception and handle accordingly
         logger.error(f"Error in on_user_login_failed: {e}")
+
+
+
