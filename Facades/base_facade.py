@@ -1,12 +1,19 @@
 import logging
 from Rachel.DAL import DAL
+from django.db import transaction
 from django.db import DatabaseError
 from django.contrib.auth import  logout
 from axes.helpers import get_client_ip_address
+from Forms.user_forms import CivilianUpdateForm
 from django.core.exceptions import ValidationError
 from django.contrib.auth import update_session_auth_hash
+from Forms.support_provider_forms import SupportProviderUpdateForm
 from Forms.common_forms import CustomChangePasswordForm , DeactivateForm
-from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity , User
+from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity , User , Civilian , SupportProvider
+
+
+
+
 
 
 
@@ -182,3 +189,121 @@ class BaseFacade:
             raise ValidationError(password_form.errors)
 
         return True
+    
+
+
+    # def update_profile(self, user, profile_data, request):
+
+    #     """
+    #     Updates a user's profile with the given data.
+
+    #     Args:
+    #         user (User): The user instance whose profile is to be updated.
+    #         profile_data (dict): A dictionary containing the profile data to be updated.
+    #         request: The HTTP request object, used to get the user's IP address.
+
+    #     Raises:
+    #         ValidationError: If an error occurs during the update process.
+
+    #     Returns:
+    #         bool: True if the profile update is successful, otherwise raises an exception.
+    #     """
+
+    #     try:
+    #         with transaction.atomic():
+    #             # Update user fields if present in profile_data
+    #             if 'email' in profile_data:
+    #                 user.email = profile_data['email']
+    #             if 'first_name' in profile_data:
+    #                 user.first_name = profile_data['first_name']
+    #             if 'last_name' in profile_data:
+    #                 user.last_name = profile_data['last_name']
+
+    #             user.save()
+
+    #             # Update specific profile fields for Civilian or SupportProvider
+    #             if hasattr(user, 'civilian'):
+    #                 civilian_profile = user.civilian
+    #                 if 'address' in profile_data:
+    #                     civilian_profile.address = profile_data['address']
+    #                 if 'phone_number' in profile_data:
+    #                     civilian_profile.phone_number = profile_data['phone_number']
+    #                 civilian_profile.save()
+
+    #             elif hasattr(user, 'supportprovider'):
+    #                 support_provider_profile = user.supportprovider
+    #                 if 'address' in profile_data:
+    #                     support_provider_profile.address = profile_data['address']
+    #                 if 'phone_number' in profile_data:
+    #                     support_provider_profile.phone_number = profile_data['phone_number']
+    #                 support_provider_profile.save()
+
+    #             # Log the profile update
+    #             user_ip = get_client_ip_address(request)
+    #             self.dal.create(UserActivity, user=user, activity_type='profile_update', ip_address=user_ip)
+    #             logger.info(f"Profile updated for user: {user.username} from IP: {user_ip}")
+
+    #     except Exception as e:
+    #         logger.error(f"Error in update_profile for user {user.username}: {e}", exc_info=True)
+    #         raise ValidationError("An error occurred during the profile update.")
+
+    #     return True
+
+
+
+    def update_profile(self, user_id, profile_data, request):
+
+        """
+        Updates the profile of a user based on their role (Civilian or Support Provider).
+        
+        Args:
+            user_id (int): The ID of the user whose profile is to be updated.
+            profile_data (dict): The data to update the user's profile with.
+            request: The HTTP request object, used for session updates and IP address retrieval.
+        
+        Returns:
+            bool: True if the update is successful, False otherwise.
+        
+        Raises:
+            ValidationError: If the form validation fails or if the user does not exist.
+        """
+        
+        update_successful = False  # Initializing the variable
+        
+        try:
+            with transaction.atomic():
+                # Fetch user and determine the role
+                user = self.dal.get_by_id(User, user_id)
+                if Civilian.objects.filter(user=user).exists():
+                    civilian_instance = self.dal.get_related(user, 'civilian')
+                    form = CivilianUpdateForm(data=profile_data, instance=civilian_instance)
+                elif SupportProvider.objects.filter(user=user).exists():
+                    support_provider_instance = self.dal.get_related(user, 'supportprovider')
+                    form = SupportProviderUpdateForm(data=profile_data, instance=support_provider_instance)
+                else:
+                    logger.error("User role not identified for user_id: " + str(user_id))
+                    return False  # Return False immediately if user role is not identified
+            
+                # Validate and save the form
+                if form.is_valid():
+                    form.save(commit=True)
+                    # Record the activity
+                    user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+                    self.dal.create(UserActivity, user=user, activity_type='profile_updated', ip_address=user_ip)
+                    logger.info(f"Profile updated successfully for user_id: {user_id}")
+                    update_successful = True  # Set the variable to True if update is successful
+                else:
+                    logger.warning(f"Profile update failed due to form validation errors for user_id: {user_id}")
+        
+        except ValidationError as e:
+            logger.error(f"Validation error during profile update for user_id {user_id}: {e}")
+        
+        except Exception as e:
+            logger.error(f"Unexpected error during profile update for user_id {user_id}: {e}")
+
+        if update_successful:
+            logger.debug(f"Profile update successful for user_id: {user_id}")
+        else:
+            logger.warning(f"Profile update unsuccessful for user_id: {user_id}")
+
+        return update_successful  # Return the variable at the end
