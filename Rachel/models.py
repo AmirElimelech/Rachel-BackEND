@@ -596,11 +596,8 @@ class UserActivity(TimestampedModel):
         ('account_creation', _('Account Creation')),
         ('password_reset_request', _('Password Reset Request')),
         ('password_reset_completed', _('Password Reset Completed')),
-        ('tos_acceptance', _('Terms of Service Acceptance')),
-        ('session_timeout', _('Session Timeout')),
-        ('file_upload', _('File Upload')),
-        ('file_download', _('File Download')),
-        ('api_access', _('API Access')),
+        ('tos_accepted', _('Terms of Service Accepted')),
+        ('preferences_updated', _('Preferences Updated')),
         ('user_feedback', _('User Feedback Submission')),
     ]
 
