@@ -3,8 +3,8 @@
 
 import datetime
 from django.db import  models
-from django.contrib.auth.models import User
 from .core_models import TimestampedModel
+from django.contrib.auth.models import User
 from django.core.exceptions import  ValidationError
 from simple_history.models import  HistoricalRecords
 from django.utils.translation import gettext_lazy as _
@@ -45,6 +45,8 @@ class UserActivity(TimestampedModel):
         ('tos_accepted', _('Terms of Service Accepted')),
         ('preferences_updated', _('Preferences Updated')),
         ('user_feedback', _('User Feedback Submission')),
+        ('support_provider_rated', _('Support Provider Rated')),
+        
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
