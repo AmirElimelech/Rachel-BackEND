@@ -1,4 +1,5 @@
 import logging
+import requests
 from Rachel.DAL import DAL 
 from django.db.models import Q
 from django.contrib.auth.models import User
@@ -340,3 +341,41 @@ class CivilianFacade:
         except Exception as e:
             logger.error(f"Error in rate_support_provider: {e}")
             return False
+        
+
+    def address_lookup(self, user_id, query, request):
+
+        """
+        Perform an address lookup and log the activity.
+
+        Args:
+            user_id (int): ID of the user performing the lookup.
+            query (str): The address query string.
+            request: The HTTP request object for getting the IP address.
+
+        Returns:
+            dict: The results from the Nominatim API or an error message.
+        """
+
+        try:
+            # API Call to Nominatim
+            base_url = "https://nominatim.openstreetmap.org/search.php"
+            params = {'q': query, 'format': 'jsonv2'}
+            response = requests.get(base_url, params=params)
+
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"Address lookup successful for query: {query}")
+            else:
+                logger.error(f"Address lookup failed for query: {query}")
+                data = {'error': 'Unable to fetch location data'}
+
+            # Log the user activity
+            user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+            self.dal.create(UserActivity, user_id=user_id, activity_type='address_lookup', ip_address=user_ip)
+
+            return data
+
+        except Exception as e:
+            logger.error(f"Error during address lookup for query: {query}: {e}", exc_info=True)
+            return {'error': 'An error occurred during the address lookup'}
