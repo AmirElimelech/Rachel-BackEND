@@ -14,6 +14,7 @@ from simple_history.models import HistoricalRecords
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import validate_ipv46_address
 from phonenumber_field.modelfields import PhoneNumberField
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.validators import FileExtensionValidator , MaxLengthValidator
 
 
@@ -370,6 +371,24 @@ class SupportProvider(CommonUserProfile):
     looking_to_earn = models.BooleanField(default=False, help_text=_("Indicates if the user is looking to earn through their services."))
     support_provider_categories = models.ManyToManyField('SupportProviderCategory', blank=True, help_text=_("Categories of support provided."))
     additional_info = models.TextField(blank=True, null=True, max_length=250, help_text=_("Additional details about the services offered."))
+    kosher = models.BooleanField(default=False, help_text=_("Indicates if the provider offers Kosher services."))
+    rating = models.IntegerField(
+        default=0, 
+        help_text=_("Average rating from 1 to 5"), 
+        validators=[
+            MinValueValidator(1, message=_("Rating cannot be less than 1")),
+            MaxValueValidator(5, message=_("Rating cannot be more than 5"))
+        ]
+    )
+    accessible_facilities = models.BooleanField(
+        default=False, 
+        help_text=_("Indicates if the provider offers facilities accessible for individuals with disabilities")
+    )
+    service_hours = models.CharField(
+        max_length=255, 
+        blank=True, 
+        help_text=_("Service hours of the provider, e.g., 'Mon-Fri 9 AM to 5 PM'")
+    )
     history = HistoricalRecords()
 
     def clean(self):
