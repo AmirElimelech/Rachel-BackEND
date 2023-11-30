@@ -3,18 +3,21 @@
 import logging
 from Rachel.DAL import DAL
 from django.urls import reverse
-from django.db import transaction
-from django.core.mail import send_mail
+from Rachel.models import UserActivity
+from django.core.mail  import  send_mail
 from django.contrib.auth.models import User 
 from django.utils.encoding import force_bytes
+from django.db import transaction,IntegrityError
 from Forms.miscellaneous_forms import ContactForm
-from rest_framework.authtoken.models import  Token
-from django.core.exceptions import  ValidationError
-from django.utils.http import  urlsafe_base64_encode
-from django.contrib.auth import  authenticate, login
-from django.utils.translation import gettext_lazy as  _
+from Forms.user_forms import  CivilianRegisterForm
+from rest_framework.authtoken.models  import  Token
+from django.core.exceptions import   ValidationError
+from django.utils.http import   urlsafe_base64_encode
+from django.contrib.auth import    authenticate, login
+from django.utils.translation  import gettext_lazy as  _
+from Forms.support_provider_forms import SupportProviderRegisterForm
 from Rachel.utils import alert_for_suspicious_activity , request_password_reset , can_request_password_reset
-from Rachel.models import City , Country , Language , SupportProvider , Civilian , Intentions , SupportProviderCategory ,UserActivity
+
 
 
 
@@ -34,172 +37,64 @@ class AnonymousFacade:
         self.dal = DAL()
 
 
-    
-    def register_user(self, request, user_type, username, email, password, identification_number, id_type, country_of_issue_id, languages_spoken_ids, city_id, country_id, phone_number, terms_accepted, profile_picture, address, gender=None, support_provider_categories_ids=None, looking_to_earn=None, **extra_fields):
-        
-        """
-        Registers a new user, either a civilian or a support provider, with comprehensive personal and identification details.
 
-        This method performs several checks for data uniqueness (like username, email, phone number, and identification number), handles user creation, and sets up additional profile details specific to the user type. It also logs the user's IP address and activities related to account creation.
+
+    def register_user(self, request, user_type, form_data):
+
+        """
+        Registers a new user using the appropriate form based on user type.
 
         Args:
-        request: The HTTP request object, used for obtaining the user's IP address.
-        user_type (str): The type of the user ('civilian' or 'support_provider').
-        username (str): The chosen username for the user.
-        email (str): The user's email address.
-        password (str): The user's chosen password.
-        identification_number (str): A unique identification number for the user.
-        id_type (str): The type of the provided identification.
-        country_of_issue_id (int): ID of the country that issued the user's identification.
-        languages_spoken_ids (list of int): IDs of the languages the user speaks.
-        city_id (int): The ID of the city where the user resides.
-        country_id (int): The ID of the country where the user resides.
-        phone_number (str): The user's phone number.
-        terms_accepted (bool): Whether the user has accepted terms and conditions.
-        profile_picture (File/Image): The user's profile picture.
-        address (str): The user's physical address.
-        gender (str, optional): The gender of the user. Only required for 'civilian' user type.
-        support_provider_categories_ids (list of int, optional): Categories of interest for 'support_provider' user type.
-        looking_to_earn (bool, optional): Indicates if the support provider is looking to earn through the platform.
-        extra_fields (dict): Any additional fields relevant for user registration.
+        request: HTTP request object for context.
+        user_type (str): Type of user ('civilian' or 'support_provider').
+        form_data (dict): Data submitted in the registration form.
 
         Returns:
-            User: The created User object if successful; None if unsuccessful due to invalid user type.
+        User object if registration is successful, None otherwise.
 
         Raises:
-        ValidationError: If there are any issues with the input data or if the registration process fails due to data validation.
-        Exception: For any unexpected errors during the registration process.
+        ValidationError if form validation fails.
+        Exception for unexpected errors.
         """
-        
-        
-        
+
         user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
-        logger.info("Processing user registration request")
+        logger.info(f"Registering new {user_type} from IP: {user_ip}")
 
-        errors = {}
-        user = None
-
-        logger.info("Validating registration request")
+        registration_successful = False  # Initialize the variable
 
         try:
-            with transaction.atomic(): 
-
-        
-                if not terms_accepted:
-                    logger.error(f"terms are not accepted yet.")
-                    errors['terms_accepted'] = _("You must accept the terms and conditions to register.")
-
-                if self.dal.get_by_field(User, username=username):
-                    logger.error(f"Username {username} already exists.")
-                    errors['username'] = _("A user with this username already exists.")
-
-                if self.dal.get_by_field(User, email=email):
-                    logger.error(f"Email {email} already exists.")
-                    errors['email'] = _("A user with this email already exists.")
-
-                if self.dal.filter(User, phone_number=phone_number).exists():
-                    logger.error(f"Phone number {phone_number} already exists.")
-                    errors['phone_number'] = _("A user with this phone number already exists.")
-
-                identification_filter_kwargs = {
-                    'identification_number': identification_number, 
-                    'country_of_issue_id': country_of_issue_id, 
-                    'id_type': id_type
-                }
-                if self.dal.filter(Civilian, **identification_filter_kwargs).exists() or \
-                   self.dal.filter(SupportProvider, **identification_filter_kwargs).exists():
-                    errors['identification_number'] = _("A user with this ID number, country of issue, and ID type already exists.")
-
-                if errors:
-                    logger.info("Erros List")
-                    raise ValidationError(errors)
-
-                user_data = {
-                    'username': username,
-                    'email': email,
-                    'password': password,
-                    **extra_fields
-                }
-
-                logger.info(f"User info approved, registering user {username}!")
-                user = self.dal.create(User, **user_data)
-                logger.info(f"User {username} registered successfully")
-                
-
-
-
-        
-        
-
-                country_of_issue = self.dal.get_by_id(Country, country_of_issue_id)
-                city = self.dal.get_by_id(City, city_id)
-                country = self.dal.get_by_id(Country, country_id)
-                languages_spoken = self.dal.filter(Language, id__in=languages_spoken_ids)
-
-                if not all([country_of_issue, city, country]):
-                    logger.error("Invalid country, city, or language information.")
-                    raise ValidationError("Invalid country, city, or language information.")
-
-                common_fields = {
-                    'user': user,
-                    'identification_number': identification_number,
-                    'id_type': id_type,
-                    'country_of_issue': country_of_issue,
-                    'city': city,
-                    'country': country,
-                    'phone_number': phone_number,
-                    'terms_accepted': terms_accepted,
-                    'profile_picture': profile_picture,
-                    'address': address,
-                    'languages_spoken': languages_spoken,
-                }
-
+            with transaction.atomic():
                 if user_type == 'civilian':
-                    civilian_data = {**common_fields, 'gender': gender}
-                    logger.info("Creating civilian profile")
-                    civilian = self.dal.create(Civilian, **civilian_data)
-
-                    if 'intentions_ids' in extra_fields:
-                        intentions = self.dal.filter(Intentions, id__in=extra_fields['intentions_ids'])
-                        civilian.intentions.set(intentions)
-                        logger.info(f"Set intentions for civilian user {username}")
-
-                    logger.info(f"Civilian user {username} created successfully")
-
-
+                    form = CivilianRegisterForm(form_data)
                 elif user_type == 'support_provider':
-                    support_provider_data = {**common_fields, 'looking_to_earn': looking_to_earn}
-                    logger.info("Creating support provider profile")
-                    support_provider = self.dal.create(SupportProvider, **support_provider_data)
-
-                    if support_provider_categories_ids:
-                        categories = self.dal.filter(SupportProviderCategory, id__in=support_provider_categories_ids)
-                        support_provider.support_provider_categories.set(categories)
-                        logger.info(f"Set categories for support provider user {username}")
-
-                    logger.info(f"Support provider user {username} created successfully")
-
-
+                    form = SupportProviderRegisterForm(form_data)
                 else:
-                    errors['user_type'] = _("Invalid user type provided. Expected 'civilian' or 'support_provider'.")
-                    logger.error(f"Invalid user type provided: {user_type}")
-                    raise ValidationError(errors)
-                
-                if user:
+                    raise ValueError(f"Invalid user type: {user_type}")
+
+                if form.is_valid():
+                    user = form.save(commit=True)
+                    logger.info(f"User {user.username} ({user_type}) registered successfully")
                     self.dal.create(UserActivity, user=user, activity_type='account_creation', ip_address=user_ip)
+                    registration_successful = True  # Set the variable to True if registration is successful
+                else:
+                    error_messages = form.errors.as_json()
+                    logger.warning(f"Form validation errors for {user_type}: {error_messages}")
+                    raise ValidationError(form.errors)
 
-        except ValidationError as e:
-            logger.warning(f"Validation error during registration: {e}")
-            raise e  # Rethrow to be handled by the caller
-
+        except IntegrityError as e:
+            logger.error(f"Database integrity error during registration of {user_type}: {e}")
+            raise ValidationError("A database integrity error occurred. Please try again.")
+        except ValueError as e:
+            logger.error(f"Value error during registration of {user_type}: {e}")
+            raise
         except Exception as e:
-            logger.error(f"Unexpected error during registration: {e}", exc_info=True)
+            logger.error(f"Unexpected error during registration of {user_type}: {e}")
             raise Exception("An unexpected error occurred during registration. Please try again later.")
 
-        return user if user_type in ['civilian', 'support_provider'] else None
-
-
-
+        if registration_successful:
+            return user  # Return the User object if registration is successful
+        else:
+            return None
 
 
 
