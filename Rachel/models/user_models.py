@@ -4,11 +4,12 @@
 from datetime import date
 from django.db import  models
 from django_cryptography.fields import encrypt
+from .core_models import TimestampedModel , City
 from django_countries.fields import CountryField
+from .support_models import SupportProviderRating
 from django.contrib.auth.models import User, Group
 from django.core.exceptions import  ValidationError
 from simple_history.models import HistoricalRecords
-from .core_models import TimestampedModel , City
 from django.utils.translation import  gettext_lazy  as _
 from phonenumber_field.modelfields import PhoneNumberField
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -222,6 +223,18 @@ class SupportProvider(CommonUserProfile):
         if errors:
             raise ValidationError(errors)
 
+
+    def update_average_rating(self):
+        """
+        Update the average rating for this support provider.
+        """
+        ratings = SupportProviderRating.objects.filter(support_provider=self)
+        if ratings.exists():
+            avg_rating = ratings.aggregate(models.Avg('rating'))['rating__avg']
+            self.rating = avg_rating
+            self.save()
+
+   
     def __str__(self):
         return f"{self.user.username} - SupportProvider"
     
