@@ -46,6 +46,7 @@ class UserActivity(TimestampedModel):
         ('preferences_updated', _('Preferences Updated')),
         ('user_feedback', _('User Feedback Submission')),
         ('support_provider_rated', _('Support Provider Rated')),
+        ('address_lookup', _('Address Searched')),
         
     ]
 
