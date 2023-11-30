@@ -1,7 +1,9 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
+from django.utils.translation  import gettext_lazy as  _
 from Rachel.utils import clean_phone_number , validate_image
+from django.core.validators import MinValueValidator, MaxValueValidator
 from Rachel.models import SupportProvider, Language, SupportProviderCategory, City, Country
 
 
@@ -29,13 +31,24 @@ class SupportProviderRegisterForm(UserCreationForm):
     address = forms.CharField(max_length=200, required=True)
     looking_to_earn = forms.BooleanField(required=True)
     profile_picture = forms.ImageField(required=True)
+    kosher = forms.BooleanField(required=False, label=_("Offers Kosher Services"))
+    rating = forms.IntegerField(
+        initial=0,
+        validators=[
+            MinValueValidator(1, message=_("Rating cannot be less than 1")),
+            MaxValueValidator(5, message=_("Rating cannot be more than 5"))
+        ]
+    )
+    accessible_facilities = forms.BooleanField(required=False)
+    service_hours = forms.CharField(max_length=255, required=False)
 
     class Meta:
         model = User
         fields = [
             'username', 'email', 'password1', 'password2', 'identification_number', 'id_type',
             'country_of_issue', 'languages_spoken', 'city', 'country', 'phone_number',
-            'terms_accepted', 'support_provider_categories', 'additional_info', 'address', 'looking_to_earn'
+            'terms_accepted', 'support_provider_categories', 'additional_info', 'address', 'looking_to_earn',
+            'kosher', 'rating', 'accessible_facilities', 'service_hours'
         ]
 
     def clean_phone_number(self):
@@ -65,7 +78,11 @@ class SupportProviderRegisterForm(UserCreationForm):
             terms_accepted=self.cleaned_data['terms_accepted'],
             address=self.cleaned_data['address'],
             looking_to_earn=self.cleaned_data['looking_to_earn'],
-            profile_picture=self.cleaned_data.get('profile_picture'),  
+            profile_picture=self.cleaned_data.get('profile_picture'),
+            kosher=self.cleaned_data.get('kosher', False),
+            rating=self.cleaned_data['rating'],
+            accessible_facilities=self.cleaned_data['accessible_facilities'],
+            service_hours=self.cleaned_data['service_hours'],  
         )
         support_provider.save()
 
@@ -85,7 +102,17 @@ class SupportProviderUpdateForm(forms.ModelForm):
     """
 
     phone_number = forms.CharField(required=True)
-    profile_picture = forms.ImageField(required=False) 
+    profile_picture = forms.ImageField(required=False)
+    kosher = forms.BooleanField(required=False, label=_("Offers Kosher Services"))
+    rating = forms.IntegerField(
+        validators=[
+            MinValueValidator(1, message=_("Rating cannot be less than 1")),
+            MaxValueValidator(5, message=_("Rating cannot be more than 5"))
+        ],
+        required=False
+    )
+    accessible_facilities = forms.BooleanField(required=False)
+    service_hours = forms.CharField(max_length=255, required=False)
 
     def clean_phone_number(self):
         country = self.cleaned_data.get('country')
@@ -101,19 +128,30 @@ class SupportProviderUpdateForm(forms.ModelForm):
     class Meta:
         model = SupportProvider
         fields = [
-            'languages_spoken', 'city', 'country', 'phone_number', 
-            'support_provider_categories', 'additional_info', 'address', 
-            'looking_to_earn', 'profile_picture'  
+            'languages_spoken', 'city', 'country', 'phone_number',
+            'support_provider_categories', 'additional_info', 'address',
+            'looking_to_earn', 'profile_picture', 'kosher', 'rating', 
+            'accessible_facilities', 'service_hours'
         ]
 
     def save(self, commit=True):
         support_provider = super().save(commit=False)
         if commit:
             support_provider.save()
-
-        # Handle the many-to-many fields
+        
+        # Handle the many-to-many fields and newly added fields
         support_provider.languages_spoken.set(self.cleaned_data['languages_spoken'])
         support_provider.support_provider_categories.set(self.cleaned_data['support_provider_categories'])
-
+        # Update additional fields if provided
+        if 'kosher' in self.cleaned_data:
+            support_provider.kosher = self.cleaned_data['kosher']
+        if 'rating' in self.cleaned_data:
+            support_provider.rating = self.cleaned_data['rating']
+        if 'accessible_facilities' in self.cleaned_data:
+            support_provider.accessible_facilities = self.cleaned_data['accessible_facilities']
+        if 'service_hours' in self.cleaned_data:
+            support_provider.service_hours = self.cleaned_data['service_hours']
+        
+        support_provider.save()  # Save the updated data
         return support_provider
 
