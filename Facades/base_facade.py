@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import update_session_auth_hash
 from Forms.support_provider_forms import SupportProviderUpdateForm
 from Forms.common_forms import CustomChangePasswordForm , DeactivateForm
-from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity , User , Civilian , SupportProvider, UserPreference
+from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity, User, Civilian, SupportProvider, UserPreference, SupportProviderCategory,CommonUserProfile
 
 
 
@@ -270,7 +270,7 @@ class BaseFacade:
         Raises:
             ValidationError: If an error occurs during processing.
         """
-        
+
         operation_successful = False  # Flag to track success of the operation
 
         try:
@@ -302,3 +302,104 @@ class BaseFacade:
             raise ValidationError("An unexpected error occurred.")
 
         return operation_successful
+    
+
+
+
+
+    def fetch_user_activity(self, user_id):
+        """
+        Fetches the activity log for a specific user.
+
+        Args:
+            user_id (int): The ID of the user whose activity log is to be fetched.
+
+        Returns:
+            list: A list of dictionaries containing details of each user activity.
+        """
+        logger.info(f"Initiating fetch for user activity log. User ID: {user_id}")
+
+        try:
+            # list the activities from the most recent and so on ... 
+            activities = self.dal.filter(UserActivity, user_id=user_id).order_by('-timestamp')
+
+            if not activities.exists():
+                logger.warning(f"No activities found for user ID {user_id}")
+                return []
+
+            activity_log = [{
+                'activity_type': activity.activity_type,
+                'timestamp': activity.timestamp,
+                'ip_address': activity.ip_address
+            } for activity in activities]
+
+            logger.info(f"Fetched {len(activity_log)} activities for user ID {user_id}")
+            return activity_log
+
+        except ValidationError as ve:
+            logger.error(f"Validation error occurred while fetching activities for user ID {user_id}: {ve}")
+            raise ve
+
+        except Exception as e:
+            logger.error(f"Unexpected error occurred while fetching activities for user ID {user_id}: {e}")
+            raise ValidationError("An unexpected error occurred while retrieving user activities.")
+        
+
+
+    def list_support_provider_categories(self):
+
+        """
+        Retrieves a list of all support provider categories from the database.
+
+        Returns:
+            list of dict: A list where each dict represents a support provider category.
+        """
+
+        logger.info("Starting retrieval of support provider categories.")
+        try:
+            categories = self.dal.get_all(SupportProviderCategory)
+            category_list = [{'id': category.id, 'name': category.name} for category in categories]
+            logger.info(f"Successfully retrieved {len(category_list)} support provider categories.")
+            return category_list
+
+        except DatabaseError as db_err:
+            logger.error(f"Database error in list_support_provider_categories: {db_err}")
+            raise ValidationError("A database error occurred while retrieving categories.")
+        except Exception as e:
+            logger.error(f"Error in list_support_provider_categories: {e}")
+            raise ValidationError("An error occurred while retrieving support provider categories.")
+        
+
+    def get_user_image(self, user_id):
+        """
+        Retrieves the profile image of the logged-in user.
+
+        Args:
+            user_id (int): The ID of the logged-in user.
+
+        Returns:
+            str: URL of the user's profile image.
+
+        Raises:
+            ValidationError: If the user's profile or image is not found.
+        """
+        logger.info(f"Attempting to retrieve profile image for user_id: {user_id}")
+
+        try:
+            profile = self.dal.get_by_field(CommonUserProfile, user_id=user_id)
+            
+            if not profile or not profile.profile_picture:
+                logger.warning(f"No profile image found for user_id: {user_id}")
+                raise ValidationError("No profile image found for the user.")
+
+            image_url = profile.profile_picture.url
+            logger.info(f"Profile image retrieved successfully for user_id: {user_id}: {image_url}")
+
+            return image_url
+
+        except ValidationError as e:
+            logger.error(f"Validation error in get_image for user_id {user_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in get_image for user_id {user_id}: {e}")
+            raise ValidationError("An unexpected error occurred while fetching the image.")
