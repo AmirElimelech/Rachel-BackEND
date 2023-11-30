@@ -2,12 +2,13 @@
 
 
 from django.db import  models
-from .user_models import SupportProvider
 from .core_models import TimestampedModel
+from django.contrib.auth.models import User
 from django.core.exceptions import  ValidationError
 from simple_history.models import HistoricalRecords
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import FileExtensionValidator 
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 
@@ -153,7 +154,7 @@ class Shelter(TimestampedModel):
             ]),
         ]
     )
-    support_provider = models.ForeignKey(SupportProvider,on_delete=models.CASCADE,
+    support_provider = models.ForeignKey('SupportProvider',on_delete=models.CASCADE,
     limit_choices_to={'support_provider_categories__name': "Shelter and Housing"},
     null=True,
     blank=True
@@ -202,3 +203,43 @@ class Shelter(TimestampedModel):
         verbose_name = _("Shelter")
         verbose_name_plural = _("Shelters")
 
+
+
+
+
+
+
+class SupportProviderRating(models.Model):
+
+    """
+    Allows a civilian user to submit feedback. Validates the input, logs the user's feedback activity, and returns True on success. Returns False for validation errors or unexpected issues.
+
+    Parameters:
+    - `user_id` (int): ID of the user submitting feedback.
+    - `feedback_text` (str): Text of the feedback.
+    - `request` (HttpRequest): HTTP request object for obtaining the user's IP address.
+
+    Returns:
+    - `bool`: True if feedback submission is successful, False otherwise.
+
+    Raises:
+    - `Exception`: For unexpected errors during the feedback submission process.
+
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    support_provider = models.ForeignKey('SupportProvider', on_delete=models.CASCADE)
+    rating = models.IntegerField(
+        validators=[
+            MinValueValidator(1, "Rating must be at least 1"),
+            MaxValueValidator(5, "Rating must not exceed 5")
+        ]
+    )
+    experience = models.TextField(null=True, blank=True, help_text="User's experience with the support provider")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'support_provider')  # Ensures unique rating for each user-provider pair
+
+    def __str__(self):
+        return f"Rating by {self.user.username} for {self.support_provider.user.username}: {self.rating}"
