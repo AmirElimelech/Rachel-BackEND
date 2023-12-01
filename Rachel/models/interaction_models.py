@@ -98,6 +98,7 @@ class UserFeedback(TimestampedModel):
 
 
 class FeedbackResponse(models.Model):
+
     """
     A model representing responses to user feedback. This model includes validations to ensure that:
     - Only administrators can respond.
@@ -105,10 +106,17 @@ class FeedbackResponse(models.Model):
     - Feedback being responded to exists and is not too old.
     - Each piece of feedback receives only one response.
     """
+    FEEDBACK_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('responded', 'Responded'),
+        ('closed', 'Closed'),
+    ]
+
     feedback = models.ForeignKey(UserFeedback, on_delete=models.CASCADE, related_name='responses')
     responder = models.ForeignKey(User, on_delete=models.CASCADE)
     response_text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=FEEDBACK_STATUS_CHOICES,default='pending',)
     history = HistoricalRecords()
 
     def __str__(self):
@@ -191,7 +199,7 @@ class Notification(TimestampedModel):
         if not self.read:
             self.read = True
             self.save()
-            
+
     def __str__(self):
         return f"Notification for {self.recipient.username}: {self.title}"
     
