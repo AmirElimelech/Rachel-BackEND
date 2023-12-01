@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import update_session_auth_hash
 from Forms.support_provider_forms import SupportProviderUpdateForm
 from Forms.common_forms import CustomChangePasswordForm , DeactivateForm
-from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity, User, Civilian, SupportProvider, UserPreference, SupportProviderCategory,CommonUserProfile
+from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity, User, Civilian, SupportProvider, UserPreference, SupportProviderCategory,CommonUserProfile,Notification
 
 
 
@@ -403,3 +403,63 @@ class BaseFacade:
         except Exception as e:
             logger.error(f"Unexpected error in get_image for user_id {user_id}: {e}")
             raise ValidationError("An unexpected error occurred while fetching the image.")
+        
+
+
+    def get_user_notifications(self, user_id):
+
+        """
+        Retrieve notifications for a given user.
+
+        Args:
+            user_id (int): The ID of the user whose notifications are to be retrieved.
+
+        Returns:
+            list: A list of dictionaries containing notification details.
+        """
+
+        try:
+            user_notifications = self.dal.filter(Notification, recipient_id=user_id)
+            notifications_list = [{
+                'id': notification.id,
+                'title': notification.title,
+                'message': notification.message,
+                'read': notification.read,
+                'notification_type': notification.notification_type,
+                'created_at': notification.created_at
+            } for notification in user_notifications]
+
+            logger.info(f"Retrieved {len(notifications_list)} notifications for user ID {user_id}.")
+            return notifications_list
+
+        except Exception as e:
+            logger.error(f"Error retrieving notifications for user ID {user_id}: {e}", exc_info=True)
+            raise
+
+    
+
+    def mark_notification_as_read(self, notification_id):
+
+        """
+        Marks a specific notification as read.
+
+        Args:
+            notification_id (int): The ID of the notification to be marked as read.
+
+        Returns:
+            bool: True if the operation is successful, False otherwise.
+        """
+        
+        try:
+            notification = self.dal.get_by_id(Notification, notification_id)
+            if notification:
+                notification.mark_as_read()
+                logger.info(f"Marked notification ID {notification_id} as read.")
+                return True
+            else:
+                logger.warning(f"No notification found with ID {notification_id}.")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error marking notification ID {notification_id} as read: {e}", exc_info=True)
+            return False
