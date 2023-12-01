@@ -21,65 +21,6 @@ class SupportProviderFacade(BaseFacade):
 
 
 
-    def view_profile(self, requesting_user_id, profile_user_id):
-
-        """
-        Retrieves the profile details of a support provider user. Ensures that users can only access their own profile.
-
-        Args:
-            requesting_user_id (int): The ID of the user making the request.
-            profile_user_id (int): The ID of the user whose profile to retrieve.
-
-        Returns:
-            dict: Support provider user profile details if found and authorized; an empty dict otherwise.
-        """
-
-        try:
-            # Check if the requesting user is trying to view their own profile
-            if requesting_user_id != profile_user_id:
-                logger.warning(f"User ID {requesting_user_id} is not authorized to view profile of User ID {profile_user_id}.")
-                return {'error': 'Permission denied'}
-
-            user = self.dal.get_by_id(User, profile_user_id)
-            if not user:
-                logger.warning(f"No user found with ID {profile_user_id}.")
-                return {}
-
-            support_provider = self.dal.get_related(user, 'supportprovider')
-            if not support_provider:
-                logger.warning(f"No support provider profile found for user ID {profile_user_id}.")
-                return {}
-
-            profile_details = {
-                'username': support_provider.user.username,
-                'email': support_provider.user.email,
-                'identification_number': support_provider.identification_number,
-                'id_type': support_provider.get_id_type_display(),
-                'country_of_issue': support_provider.country_of_issue.name if support_provider.country_of_issue else None,
-                'languages_spoken': [language.name for language in support_provider.languages_spoken.all()],
-                'active_until': support_provider.active_until,
-                'address': support_provider.address,
-                'city': support_provider.city.name if support_provider.city else None,
-                'country': support_provider.country.name if support_provider.country else None,
-                'phone_number': support_provider.phone_number,
-                'terms_accepted': support_provider.terms_accepted,
-                'looking_to_earn': support_provider.looking_to_earn,
-                'kosher': support_provider.kosher,
-                'rating': support_provider.rating,
-                'accessible_facilities': support_provider.accessible_facilities,
-                'service_hours': support_provider.service_hours,
-                'profile_picture_url': support_provider.profile_picture.url if support_provider.profile_picture else None,
-                'additional_info': support_provider.additional_info
-            }
-
-            logger.info(f"Support provider profile details retrieved for user ID {profile_user_id}.")
-            return profile_details
-
-        except Exception as e:
-            logger.error(f"Error retrieving support provider profile for user ID {profile_user_id}: {e}", exc_info=True)
-            raise
-    
-
 
     def respond_to_feedback(self, support_provider_id, feedback_id, response_text, request):
         """
