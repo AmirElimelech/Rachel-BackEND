@@ -3,11 +3,13 @@
 
 import datetime
 from django.db import  models
+from .user_models import SupportProvider
 from .core_models import TimestampedModel
 from django.contrib.auth.models import User
 from django.core.exceptions import  ValidationError
 from simple_history.models import  HistoricalRecords
 from django.utils.translation import gettext_lazy as _
+
 
 
 
@@ -67,20 +69,22 @@ class UserActivity(TimestampedModel):
 
 #UserFeedback Model
 class UserFeedback(TimestampedModel):
+
     """
     Model for storing user feedback.
     Fields:
     - user: Reference to the User model for identifying the user giving feedback.
+    - support_provider: Reference to the SupportProvider model for identifying the support provider being reviewed.
     - feedback_text: The actual feedback provided by the user.
     """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    support_provider = models.ForeignKey(SupportProvider, on_delete=models.CASCADE, null=True, blank=True)
     feedback_text = models.TextField()
     history = HistoricalRecords()
 
     def __str__(self):
-        return f"{self.user.username} - Feedback at {self.created_at}"
-    
+        return f"{self.user.username} - Feedback for {self.support_provider.user.username} at {self.created_at}"
 
     class Meta:
         verbose_name = _("User Feedback")
@@ -106,44 +110,41 @@ class FeedbackResponse(models.Model):
         return f"Response to {self.feedback.user.username}'s feedback"
 
     def clean(self):
+        
         """Perform validations on the FeedbackResponse model, aggregating all errors."""
-
         errors = {}
         min_length = 5
+        max_length = 1000  # Example: 1000 characters
 
-        # Check if the responder is part of the 'Administrator' group
-        if not self.responder.groups.filter(name='Administrator').exists():
-            errors['responder'] = "Only administrators can respond to feedback."
+        # Check if the responder is an administrator or a support provider
+        if not (self.responder.groups.filter(name='Administrator').exists() or 
+                self.responder.groups.filter(name='SupportProvider').exists()):
+            errors['responder'] = "Only administrators or support providers can respond to feedback."
 
         # Validation for empty or too short response text
-        response_text_length = len(self.response_text.strip())
-        if response_text_length == 0:
+        if len(self.response_text.strip()) == 0:
             errors['response_text'] = "Response text cannot be empty."
-        elif response_text_length < min_length:
+        elif len(self.response_text.strip()) < min_length:
             errors['response_text'] = f"Response text must be at least {min_length} characters long."
 
         # Validation for response text length
-        max_length = 1000  # Example: 1000 characters
         if len(self.response_text) > max_length:
             errors['response_text'] = f"Response text cannot exceed {max_length} characters."
 
-        # Validation for feedback existence
+        # Validation for feedback existence and duplicate responses
         if not self.feedback:
             errors['feedback'] = "The feedback being responded to must exist."
-
-        # Validation to prevent duplicate responses to the same feedback
-        if FeedbackResponse.objects.filter(feedback=self.feedback).exclude(pk=self.pk).exists():
+        elif FeedbackResponse.objects.filter(feedback=self.feedback).exclude(pk=self.pk).exists():
             errors['feedback'] = "This feedback has already been responded to."
 
-        # Validation for response timing (e.g., not allowing responses to feedback older than 30 days)
+        # Validation for response timing
         feedback_age_limit = 30  # days
         if self.feedback.created_at < datetime.date.today() - datetime.timedelta(days=feedback_age_limit):
             errors['feedback'] = "Cannot respond to feedback older than 30 days."
 
-        # Raise all validation errors at once
         if errors:
             raise ValidationError(errors)
-    
+        
 
     class Meta:
         verbose_name = _("Feedback Response")
