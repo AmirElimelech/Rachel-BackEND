@@ -6,10 +6,11 @@ from django.contrib.auth import  logout
 from axes.helpers import get_client_ip_address
 from Forms.user_forms import CivilianUpdateForm
 from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import update_session_auth_hash
 from Forms.support_provider_forms import SupportProviderUpdateForm
 from Forms.common_forms import CustomChangePasswordForm , DeactivateForm
-from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity, User, Civilian, SupportProvider, UserPreference, SupportProviderCategory,CommonUserProfile,Notification
+from Rachel.models import  UnauthorizedAccessAttempt,  UserActivity, User, Civilian, Administrator,SupportProvider, UserPreference, SupportProviderCategory,CommonUserProfile,Notification
 
 
 
@@ -84,6 +85,108 @@ class BaseFacade:
 
 
 
+
+    def view_profile(self, requesting_user_id, profile_user_id):
+        """
+        Retrieves the profile details of a user based on their role. Administrators can access any user's profile, 
+        while other users can only access their own profile.
+
+        Args:
+            requesting_user_id (int): The ID of the user making the request. Used to verify permission to access the profile.
+            profile_user_id (int): The ID of the user whose profile is to be retrieved.
+
+        Returns:
+            dict: User's profile details if found and authorized. Structure varies based on user's role.
+            Returns an empty dictionary or an error message if unauthorized or not found.
+
+        Raises:
+            Exception: If an unexpected error occurs during retrieval.
+        """
+        try:
+            requesting_user = self.dal.get_by_id(User, requesting_user_id)
+            profile_user = self.dal.get_by_id(User, profile_user_id)
+
+            # Check if the user is authorized to view the profile
+            if requesting_user_id != profile_user_id and not requesting_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {requesting_user_id} is not authorized to view profile of User ID {profile_user_id}.")
+                return {'error': 'Permission denied'}
+
+            if not profile_user:
+                logger.warning(f"No user found with ID {profile_user_id}.")
+                return {}
+
+            # Fetch the common user profile fields
+            common_profile = self.dal.get_related(profile_user, 'commonuserprofile')
+            profile_details = self._extract_common_profile_fields(common_profile)
+
+            # Extend with role-specific details
+            if Civilian.objects.filter(user=profile_user).exists():
+                profile_details.update(self._extract_civilian_specific_fields(profile_user))
+            elif SupportProvider.objects.filter(user=profile_user).exists():
+                profile_details.update(self._extract_support_provider_specific_fields(profile_user))
+            elif Administrator.objects.filter(user=profile_user).exists():
+                profile_details.update(self._extract_administrator_specific_fields(profile_user))
+            else:
+                logger.warning(f"No specific profile found for user ID {profile_user_id}.")
+                return {}
+
+            logger.info(f"Profile details retrieved for user ID {profile_user_id}.")
+            return profile_details
+
+        except Exception as e:
+            logger.error(f"Error retrieving profile for user ID {profile_user_id}: {e}", exc_info=True)
+            raise
+
+
+
+    def _extract_common_profile_fields(self, common_profile):
+        # Extract fields common to all users
+        fields = {
+            'username': common_profile.user.username,
+            'email': common_profile.user.email,
+            'identification_number': common_profile.identification_number,
+            'id_type': common_profile.get_id_type_display(),
+            'country_of_issue': common_profile.country_of_issue.name if common_profile.country_of_issue else None,
+            'languages_spoken': [language.name for language in common_profile.languages_spoken.all()],
+            'active_until': common_profile.active_until,
+            'address': common_profile.address,
+            'city': common_profile.city.name if common_profile.city else None,
+            'country': common_profile.country.name if common_profile.country else None,
+            'phone_number': common_profile.phone_number.as_e164 if common_profile.phone_number else None,
+            'terms_accepted': common_profile.terms_accepted,
+            'profile_picture_url': common_profile.profile_picture.url if common_profile.profile_picture else None,
+        }
+        return fields
+    
+
+
+    def _extract_civilian_specific_fields(self, civilian):
+        # Extract fields specific to Civilian users
+        fields = {
+            'gender': civilian.get_gender_display(),
+            'intentions': [intention.get_name_display() for intention in civilian.intentions.all()]
+        }
+        return fields
+
+    def _extract_support_provider_specific_fields(self, support_provider):
+        # Extract fields specific to Support Provider users
+        fields = {
+            'looking_to_earn': support_provider.looking_to_earn,
+            'kosher': support_provider.kosher,
+            'rating': support_provider.rating,
+            'accessible_facilities': support_provider.accessible_facilities,
+            'service_hours': support_provider.service_hours,
+            'additional_info': support_provider.additional_info,
+            'categories': [category.name for category in support_provider.support_provider_categories.all()]
+        }
+        return fields
+
+    def _extract_administrator_specific_fields(self, administrator):
+        # Extract fields specific to Administrator users
+        fields = {
+            'department': administrator.department,
+        }
+        return fields
 
 
     def deactivate_profile(self, user_id, request):
