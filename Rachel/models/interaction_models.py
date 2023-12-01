@@ -49,6 +49,11 @@ class UserActivity(TimestampedModel):
         ('user_feedback', _('User Feedback Submission')),
         ('support_provider_rated', _('Support Provider Rated')),
         ('address_lookup', _('Address Searched')),
+        ('feedback_responded', _('Feedback Responded')),
+
+
+
+        
         
     ]
 
@@ -110,7 +115,7 @@ class FeedbackResponse(models.Model):
         return f"Response to {self.feedback.user.username}'s feedback"
 
     def clean(self):
-        
+
         """Perform validations on the FeedbackResponse model, aggregating all errors."""
         errors = {}
         min_length = 5
