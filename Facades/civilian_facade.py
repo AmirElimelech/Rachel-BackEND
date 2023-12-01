@@ -61,64 +61,6 @@ class CivilianFacade(BaseFacade):
             raise
 
 
-    def view_profile(self, requesting_user_id, profile_user_id):
-
-        """
-        Retrieves the profile details of a civilian user. Ensures that users can only access their own profile.
-
-        Args:
-            requesting_user_id (int): The ID of the user making the request.
-            profile_user_id (int): The ID of the user whose profile to retrieve.
-
-        Returns:
-            dict: Civilian user profile details if found and authorized; an empty dict otherwise.
-        """
-
-        try:
-            # Check if the requesting user is trying to view their own profile
-            if requesting_user_id != profile_user_id:
-                logger.warning(f"User ID {requesting_user_id} is not authorized to view profile of User ID {profile_user_id}.")
-                return {'error': 'Permission denied'}
-
-            user = self.dal.get_by_id(User, profile_user_id)
-            if not user:
-                logger.warning(f"No user found with ID {profile_user_id}.")
-                return {}
-
-            civilian = self.dal.get_related(user, 'civilian')
-            if not civilian:
-                logger.warning(f"No civilian profile found for user ID {profile_user_id}.")
-                return {}
-
-            profile_details = {
-                'username': civilian.user.username,
-                'email': civilian.user.email,
-                'identification_number': civilian.identification_number,
-                'id_type': civilian.get_id_type_display(),
-                'country_of_issue': civilian.country_of_issue.name if civilian.country_of_issue else None,
-                'languages_spoken': [language.name for language in civilian.languages_spoken.all()],
-                'active_until': civilian.active_until,
-                'address': civilian.address,
-                'city': civilian.city.name if civilian.city else None,
-                'country': civilian.country.name if civilian.country else None,
-                'phone_number': civilian.phone_number,
-                'terms_accepted': civilian.terms_accepted,
-                'gender': civilian.get_gender_display(),
-                'intentions': [intention.get_name_display() for intention in civilian.intentions.all()],
-                'profile_picture_url': civilian.profile_picture.url if civilian.profile_picture else None
-            }
-
-            logger.info(f"Civilian profile details retrieved for user ID {profile_user_id}.")
-            return profile_details
-
-        except Exception as e:
-            logger.error(f"Error retrieving civilian profile for user ID {profile_user_id}: {e}", exc_info=True)
-            raise
-
-
-
-
-
     def view_search_history(self, user_id):
 
         """
