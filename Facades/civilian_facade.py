@@ -2,9 +2,10 @@ import logging
 import requests
 from Rachel.DAL import DAL 
 from django.db.models import Q
+from .base_facade import BaseFacade
 from django.contrib.auth.models import User
 from Forms.user_forms import UserFeedbackForm
-from Rachel.models import Shelter , SearchHistory, UserFeedback, UserActivity, SupportProvider, SupportProviderRating
+from Rachel.models import Shelter , SearchHistory, UserFeedback, UserActivity, SupportProvider, SupportProviderRating, Notification
 
 
 
@@ -13,9 +14,11 @@ from Rachel.models import Shelter , SearchHistory, UserFeedback, UserActivity, S
 
 logger = logging.getLogger(__name__)
 
-class CivilianFacade:
+class CivilianFacade(BaseFacade):
 
     def __init__(self):
+        super().__init__()
+
         self.dal = DAL()  # Initialize the DAL instance
 
 
@@ -379,3 +382,66 @@ class CivilianFacade:
         except Exception as e:
             logger.error(f"Error during address lookup for query: {query}: {e}", exc_info=True)
             return {'error': 'An error occurred during the address lookup'}
+        
+
+    def notify_rate_and_feedback(self, support_provider_id, user_id, notification_type, request):
+
+        """
+        Creates a notification for a support provider when they receive a new rating or feedback.
+
+        Args:
+            support_provider_id (int): The ID of the support provider being notified.
+            user_id (int): The ID of the user who submitted the rating or feedback.
+            notification_type (str): Type of notification ('rating' or 'feedback').
+            request: The HTTP request object for getting the IP address.
+
+        Returns:
+            bool: True if the notification is successfully created, False otherwise.
+        """
+
+        try:
+            support_provider = self.dal.get_by_id(SupportProvider, support_provider_id)
+            civilian_user = self.dal.get_by_id(User, user_id)
+
+            if not support_provider or not civilian_user:
+                logger.warning(f"Invalid support provider or civilian user ID.")
+                return False
+
+            # Define notification title and message based on the notification type
+            title = f"New {notification_type.title()} Received"
+            if notification_type == 'rating':
+                message = f"You have received a new rating from {civilian_user.username}."
+            elif notification_type == 'feedback':
+                message = f"You have received new feedback from {civilian_user.username}."
+            else:
+                logger.error(f"Invalid notification type: {notification_type}")
+                return False
+
+            # Create the notification
+            notification = self.dal.create(Notification, 
+                                        recipient=support_provider.user, 
+                                        title=title, 
+                                        message=message)
+
+            return notification is not None
+
+        except Exception as e:
+            logger.error(f"Error in notify_rate_and_feedback method: {e}", exc_info=True)
+            return False
+        
+        
+
+
+    def get_my_notifications(self, user_id):
+
+        """
+        Retrieve notifications for the civilian user.
+
+        Args:
+            user_id (int): The ID of the civilian user.
+
+        Returns:
+            list: Notifications list for the civilian user.
+        """
+
+        return self.get_user_notifications(user_id)
