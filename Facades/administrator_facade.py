@@ -18,6 +18,26 @@ class AdministratorFacade:
 
 
     def close_feedback(self, admin_user_id, feedback_id):
+
+        """
+        Closes a specific feedback case, marking it as resolved.
+
+        This method is restricted to users with 'Administrator' privileges. It updates the status of the feedback,
+        indicating that it has been reviewed and closed by an administrator. It also records which administrator 
+        closed the feedback and the timestamp when it was closed.
+
+        Args:
+            admin_user_id (int): The ID of the administrator attempting to close the feedback.
+            feedback_id (int): The ID of the feedback to be closed.
+
+        Returns:
+            dict: A response indicating whether the operation was successful or not. 
+                Returns an error message if unauthorized, if the feedback is not found, or if other issues occur.
+
+        Raises:
+            Exception: If an unexpected error occurs during the process.
+        """
+        
         admin_user = self.dal.get_by_id(User, admin_user_id)
         if not admin_user.groups.filter(name='Administrator').exists():
             logger.warning(f"User ID {admin_user_id} is not authorized to close feedback.")
@@ -35,6 +55,47 @@ class AdministratorFacade:
         else:
             logger.warning(f"No feedback found with ID {feedback_id}.")
             return {'error': 'Feedback not found'}
+
+
+
+    def fetch_all_feedback(self):
+
+        """
+        Fetches all user feedback from the database.
+
+        This method retrieves every feedback record, including details about the user who provided the feedback, 
+        the support provider it is related to, and the feedback content. 
+
+        Returns:
+            list: A list of dictionaries, each representing a feedback record.
+
+        Raises:
+            Exception: If an unexpected error occurs during retrieval.
+        """
+
+        try:
+            all_feedback = self.dal.get_all(UserFeedback)
+
+            feedback_list = []
+            for feedback in all_feedback:
+                feedback_details = {
+                    'feedback_id': feedback.id,
+                    'user': feedback.user.username,
+                    'support_provider': feedback.support_provider.user.username if feedback.support_provider else None,
+                    'feedback_text': feedback.feedback_text,
+                    'created_at': feedback.created_at,
+                    'status': feedback.status,
+                }
+                
+                feedback_list.append(feedback_details)
+
+            logger.info(f"Fetched {len(feedback_list)} feedback records.")
+            return feedback_list
+
+        except Exception as e:
+            logger.error(f"Error fetching all feedback: {e}", exc_info=True)
+            raise
+
 
 
 
