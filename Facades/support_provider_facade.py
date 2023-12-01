@@ -128,3 +128,47 @@ class SupportProviderFacade(BaseFacade):
         except Exception as e:
             logger.error(f"Error updating shelter for Support Provider {support_provider_id}: {e}", exc_info=True)
             return False
+        
+
+
+
+    def view_my_feedback(self, requesting_user_id, support_provider_id):
+
+        """
+        Retrieves all feedback associated with a specific support provider. 
+        Ensures that support providers can only see their own feedback.
+
+        Args:
+            requesting_user_id (int): The ID of the user making the request.
+            support_provider_id (int): The ID of the support provider whose feedback is being retrieved.
+
+        Returns:
+            list: A list of dictionaries containing details of each feedback if authorized; otherwise, an empty list or error message.
+        """
+        
+        try:
+            # Check if the requesting user is the same as the support provider
+            if requesting_user_id != support_provider_id:
+                logger.warning(f"User ID {requesting_user_id} is not authorized to view feedback of Support Provider ID {support_provider_id}.")
+                return {'error': 'Permission denied'}
+
+            support_provider = self.dal.get_by_id(SupportProvider, support_provider_id)
+            if not support_provider:
+                logger.warning(f"No support provider found with ID {support_provider_id}.")
+                return []
+
+            feedbacks = self.dal.filter(UserFeedback, support_provider=support_provider)
+            feedback_list = [{
+                'feedback_id': feedback.id,
+                'user': feedback.user.username,
+                'feedback_text': feedback.feedback_text,
+                'created_at': feedback.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                'status': getattr(feedback, 'status', 'pending')  # Assuming a 'status' field
+            } for feedback in feedbacks]
+
+            logger.info(f"Retrieved feedback for Support Provider ID {support_provider_id}.")
+            return feedback_list
+
+        except Exception as e:
+            logger.error(f"Error retrieving feedback for Support Provider ID {support_provider_id}: {e}", exc_info=True)
+            return []
