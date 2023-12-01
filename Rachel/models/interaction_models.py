@@ -186,6 +186,12 @@ class Notification(TimestampedModel):
     history = HistoricalRecords()
 
 
+    def mark_as_read(self):
+        """Marks the notification as read."""
+        if not self.read:
+            self.read = True
+            self.save()
+            
     def __str__(self):
         return f"Notification for {self.recipient.username}: {self.title}"
     
