@@ -74,26 +74,62 @@ class UserActivity(TimestampedModel):
 
 #UserFeedback Model
 class UserFeedback(TimestampedModel):
-
+    
     """
     Model for storing user feedback.
     Fields:
     - user: Reference to the User model for identifying the user giving feedback.
     - support_provider: Reference to the SupportProvider model for identifying the support provider being reviewed.
     - feedback_text: The actual feedback provided by the user.
+    - status: The status of the feedback (Pending, Responded, Closed).
     """
+
+    FEEDBACK_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('responded', 'Responded'),
+        ('closed', 'Closed'),
+    ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     support_provider = models.ForeignKey(SupportProvider, on_delete=models.CASCADE, null=True, blank=True)
     feedback_text = models.TextField()
+    status = models.CharField(max_length=10, choices=FEEDBACK_STATUS_CHOICES, default='pending')
     history = HistoricalRecords()
 
     def __str__(self):
-        return f"{self.user.username} - Feedback for {self.support_provider.user.username} at {self.created_at}"
+        return f"{self.user.username} - Feedback for {self.support_provider.user.username}"
+
+    def clean(self):
+        """Perform validations on the UserFeedback model, aggregating all errors."""
+        errors = {}
+
+        # Ensure feedback text is not empty
+        if not self.feedback_text.strip():
+            errors['feedback_text'] = "Feedback text cannot be empty."
+
+        # Ensure status is valid and check for logical status transitions
+        if self.pk:
+            old_feedback = UserFeedback.objects.get(pk=self.pk)
+            if old_feedback.status == 'closed' and self.status != 'closed':
+                errors['status'] = "Cannot change status from 'closed' to any other status."
+
+        # Additional validation for feedback related to support provider
+        if not self.support_provider:
+            errors['support_provider'] = "Support provider must be specified."
+
+        # Prevent users from giving feedback to themselves
+        if self.user == self.support_provider.user:
+            errors['user'] = "Users cannot give feedback to themselves."
+
+        if errors:
+            raise ValidationError(errors)
 
     class Meta:
         verbose_name = _("User Feedback")
         verbose_name_plural = _("User Feedbacks")
+
+
+
 
 
 
@@ -106,17 +142,11 @@ class FeedbackResponse(models.Model):
     - Feedback being responded to exists and is not too old.
     - Each piece of feedback receives only one response.
     """
-    FEEDBACK_STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('responded', 'Responded'),
-        ('closed', 'Closed'),
-    ]
-
+    
     feedback = models.ForeignKey(UserFeedback, on_delete=models.CASCADE, related_name='responses')
     responder = models.ForeignKey(User, on_delete=models.CASCADE)
     response_text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=10, choices=FEEDBACK_STATUS_CHOICES,default='pending',)
     history = HistoricalRecords()
 
     def __str__(self):
