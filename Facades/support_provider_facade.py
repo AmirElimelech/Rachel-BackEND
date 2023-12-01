@@ -98,6 +98,9 @@ class SupportProviderFacade(BaseFacade):
         try:
             # Retrieve the feedback and the support provider using DAL
             feedback = self.dal.get_by_id(UserFeedback, feedback_id)
+            if feedback:
+                feedback.status = 'responded'
+                feedback.save()
             support_provider = self.dal.get_by_id(SupportProvider, support_provider_id)
 
             # Check if feedback is related to this support provider
