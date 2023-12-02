@@ -147,6 +147,7 @@ class FeedbackResponse(models.Model):
     responder = models.ForeignKey(User, on_delete=models.CASCADE)
     response_text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    feedback_image = models.ImageField( upload_to='feedback/',blank=True,null=True,verbose_name=_("Feedback Picture") ) 
     history = HistoricalRecords()
 
     def __str__(self):
