@@ -29,7 +29,7 @@ class CivilianRegisterForm(UserCreationForm):
     intentions = forms.ModelMultipleChoiceField(queryset=Intentions.objects.all(), required=False)
     profile_picture = forms.ImageField(required=False)
     address = forms.CharField(max_length=200, required=False)
-    gender = forms.ChoiceField(choices=Civilian.GENDER_CHOICES, required=True, initial='rather_not_say')
+    gender = forms.ChoiceField(choices=Civilian.GENDER_CHOICES, required=True)
 
 
     class Meta:
