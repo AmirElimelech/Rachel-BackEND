@@ -36,8 +36,8 @@ class UserActivity(TimestampedModel):
         ('login', _('Login')),
         ('logout', _('Logout')),
         ('welcome_email_sent',_('Welcome Email Sent')),
-        ('account_activated', _('Account Activated')),
-        ('account_deactivated', _('Account Deactivated')),
+        ('account_activated_by_user', _('Account Activated')),
+        ('account_deactivated_by_user', _('Account Deactivated')),
         ('password_change', _('Password Change')),
         ('profile_updated', _('Profile Updated')),
         ('login_failed', _('Failed Login Attempt')),
@@ -50,10 +50,13 @@ class UserActivity(TimestampedModel):
         ('support_provider_rated', _('Support Provider Rated')),
         ('address_lookup', _('Address Searched')),
         ('feedback_responded', _('Feedback Responded')),
+        ('notification_sent', _('Notification Sent')),
+        ('account_activated_by_admin', _('Account Activated By Administrator')),
+        ('account_deactivated_by_admin', _('Account Dectivated By Administrator')),
 
 
 
-        
+
         
     ]
 
