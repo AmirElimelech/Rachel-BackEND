@@ -1,8 +1,7 @@
 from django import forms
-from Rachel.utils import validate_image
-from Rachel.utils import clean_phone_number
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
+from Rachel.utils import validate_image , clean_phone_number
 from Rachel.models import Civilian, Language, Intentions, City, Country, UserFeedback
 
 
