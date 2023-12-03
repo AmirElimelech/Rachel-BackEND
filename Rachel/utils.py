@@ -1,3 +1,4 @@
+import re
 import logging
 from .DAL import DAL
 from PIL import Image
@@ -351,3 +352,5 @@ def finalize_password_reset(user, token, request_data):
         # Handle any other validation errors
         logger.error(f"Error in password reset process for user {user.username}: {e}")
         raise
+
+
