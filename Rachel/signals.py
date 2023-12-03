@@ -126,7 +126,7 @@ def account_activation_notification(sender, instance, created, **kwargs):
             user_ip = request.META.get('REMOTE_ADDR') if request else '0.0.0.0'
 
             # Record the activity
-            activity_type = 'account_activated' if instance.is_active else 'account_deactivated'
+            activity_type = 'account_activated' if instance.is_active else 'account_deactivated_by_user'
             dal.create(UserActivity, user=instance, activity_type=activity_type, ip_address=user_ip)
 
 
