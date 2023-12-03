@@ -143,6 +143,7 @@ class Shelter(TimestampedModel):
     latitude = models.FloatField()  
     longitude = models.FloatField()
     capacity = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=False)
     history = HistoricalRecords()
     picture = models.ImageField(
         upload_to='shelters/',
