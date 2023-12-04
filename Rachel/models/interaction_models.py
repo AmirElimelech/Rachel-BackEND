@@ -204,6 +204,7 @@ class FeedbackResponse(models.Model):
 
 
 class Notification(TimestampedModel):
+
     """
     Model for handling notifications for users. Notifications can be of various types like alerts, reminders, or informational messages.
     Fields:
@@ -215,10 +216,17 @@ class Notification(TimestampedModel):
     - created_at: Timestamp for when the notification was created.
     - updated_at: Timestamp for when the notification was last updated.
     """
+
     NOTIFICATION_TYPES = [
         ('alert', _('Alert')),
         ('reminder', _('Reminder')),
         ('info', _('Information')),
+        ('new_user', _('New User')),
+        ('new_shelter', _('New Shelter')),
+        ('welcome', _('Welcome Message')),
+        ('rating', _('Rating Given')),
+        ('feedback', _('Feedback Given')),
+
     ]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
