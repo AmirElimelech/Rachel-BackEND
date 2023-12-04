@@ -3,7 +3,7 @@
 import logging
 from Rachel.DAL import DAL
 from django.urls import reverse
-from Rachel.models import UserActivity
+
 from django.core.mail  import  send_mail
 from django.contrib.auth.models import User 
 from django.utils.encoding import force_bytes
@@ -12,6 +12,7 @@ from Forms.miscellaneous_forms import ContactForm
 from Forms.user_forms import  CivilianRegisterForm
 from rest_framework.authtoken.models  import  Token
 from django.core.exceptions import   ValidationError
+from Rachel.models import UserActivity, Notification
 from django.utils.http import   urlsafe_base64_encode
 from django.contrib.auth import    authenticate, login
 from django.utils.translation  import gettext_lazy as  _
@@ -75,7 +76,19 @@ class AnonymousFacade:
                     user = form.save(commit=True)
                     logger.info(f"User {user.username} ({user_type}) registered successfully")
                     self.dal.create(UserActivity, user=user, activity_type='account_creation', ip_address=user_ip)
-                    registration_successful = True  # Set the variable to True if registration is successful
+                    
+                    # Send 'new_user' notification to all administrators
+                    admin_users = self.dal.filter(User, groups__name='Administrator')
+                    for admin in admin_users:
+                        self.dal.create(
+                            Notification,
+                            recipient=admin,
+                            title="New User Registration",
+                            message=f"A new user '{user.username}' has been registered and needs review.",
+                            notification_type='new_user'
+                        )
+
+                    registration_successful = True
                 else:
                     error_messages = form.errors.as_json()
                     logger.warning(f"Form validation errors for {user_type}: {error_messages}")
