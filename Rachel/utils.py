@@ -12,7 +12,7 @@ from django.utils.crypto import get_random_string
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from Rachel.models import Country , PasswordResetRequest , UserActivity
+from Rachel.models import Country , PasswordResetRequest , UserActivity, Notification
 
 
 SUSPICIOUS_ATTEMPT_THRESHOLD = 5
@@ -354,3 +354,24 @@ def finalize_password_reset(user, token, request_data):
         raise
 
 
+def send_notification(recipient, title, message, notification_type='info'):
+
+    """
+    Sends a notification to a user.
+
+    Args:
+        recipient (User): The user who will receive the notification.
+        title (str): The title of the notification.
+        message (str): The message content of the notification.
+        notification_type (str): The type of the notification (default is 'info').
+
+    Returns:
+        Notification: The created Notification object.
+    """
+    
+    notification = dal.create(Notification, 
+                            recipient=recipient, 
+                            title=title, 
+                            message=message, 
+                            notification_type=notification_type)
+    return notification
