@@ -6,7 +6,7 @@ from axes.models import AccessAttempt
 from django.core.mail  import  send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import   urlsafe_base64_encode
-from Rachel.utils import request_password_reset , can_request_password_reset
+from Rachel.utils import request_password_reset , can_request_password_reset ,send_notification
 from Rachel.models import User, SupportProvider, Shelter, UserActivity, UserFeedback, Notification
 
 
@@ -25,7 +25,7 @@ class AdministratorFacade:
 
 
     def close_feedback(self, admin_user_id, feedback_id):
-
+        
         """
         Closes a specific feedback case, marking it as resolved.
 
@@ -53,15 +53,31 @@ class AdministratorFacade:
         feedback = self.dal.get_by_id(UserFeedback, feedback_id)
         if feedback:
             feedback.status = 'closed'
-            feedback.closed_by = admin_user  # Assuming you have a 'closed_by' field
-            feedback.closed_at = timezone.now()  # Assuming you have a 'closed_at' field
+            feedback.closed_by = admin_user
+            feedback.closed_at = timezone.now()
             feedback.save()
             logger.info(f"Feedback ID {feedback_id} closed by Administrator ID {admin_user_id}.")
-            # Optional: Notify relevant parties
+
+            # Send notification to the civilian user
+            self.dal.create(Notification, 
+                            recipient=feedback.user,
+                            title="Feedback Case Closed",
+                            message=f"Your feedback case ID {feedback_id} has been closed by an administrator.",
+                            notification_type='info')
+
+            # Send notification to the support provider (if any)
+            if feedback.support_provider:
+                self.dal.create(Notification, 
+                                recipient=feedback.support_provider.user,
+                                title="Feedback Case Closed",
+                                message=f"A feedback case involving you (ID {feedback_id}) has been closed by an administrator.",
+                                notification_type='info')
+
             return {'success': True}
         else:
             logger.warning(f"No feedback found with ID {feedback_id}.")
             return {'error': 'Feedback not found'}
+
 
 
 
@@ -226,6 +242,17 @@ class AdministratorFacade:
             # Log the action
             user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
             self.dal.create(UserActivity, user=admin_user, activity_type='account_activated', ip_address=user_ip, description=f"Activated user ID {user_id_to_activate}")
+
+
+
+            # Send a welcome notification upon activation
+            send_notification(
+            recipient=user_to_activate,
+            title="Welcome to Rachel",
+            message="Your account has been activated. Welcome aboard!",
+            notification_type='welcome'
+            )
+                    
 
             logger.info(f"User ID {user_id_to_activate} activated by Administrator ID {admin_user_id}.")
             return {'success': True}
@@ -496,7 +523,7 @@ class AdministratorFacade:
 
 
     def search_users(self, admin_user_id, search_criteria):
-        
+
         """
         Dynamically searches and filters users based on a variety of criteria such as username, email, role, etc.
         This method builds a query dynamically based on the criteria provided by the frontend and uses the DAL for database operations.
