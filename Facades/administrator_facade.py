@@ -1,7 +1,14 @@
 import logging
 from Rachel.DAL import DAL
+from django.urls import reverse
 from django.utils import timezone
-from Rachel.models import User, SupportProvider, Shelter, UserActivity, UserFeedback
+from axes.models import AccessAttempt
+from django.core.mail  import  send_mail
+from django.utils.encoding import force_bytes
+from django.utils.http import   urlsafe_base64_encode
+from Rachel.utils import request_password_reset , can_request_password_reset
+from Rachel.models import User, SupportProvider, Shelter, UserActivity, UserFeedback, Notification
+
 
 
 
@@ -99,98 +106,524 @@ class AdministratorFacade:
 
 
 
+    def send_notification_to_all_civilians(self, request, admin_user_id, title, message, notification_type='info'):
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def approve_user(self, user_id):
         """
-        Approves a user account, typically after verifying the account details.
+        Sends a notification to all civilian users.
+
+        Args:
+            request: The HTTP request object, used to get the administrator's IP address.
+            admin_user_id (int): The ID of the administrator sending the notification.
+            title (str): The title of the notification.
+            message (str): The message content of the notification.
+            notification_type (str): The type of the notification (default is 'info').
+
+        Returns:
+            dict: A response indicating success or an error message.
+        """
+
+        try:
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to send notifications.")
+                return {'error': 'Permission denied'}
+
+            civilians = User.objects.filter(groups__name='Civilian')
+            for civilian in civilians:
+                self.dal.create(Notification, 
+                                recipient=civilian, 
+                                title=title, 
+                                message=message,
+                                notification_type=notification_type)
+
+            # Log the action
+            user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+            self.dal.create(UserActivity, user=admin_user, activity_type='notification_sent', ip_address=user_ip)
+
+            logger.info(f"Notification sent to all civilians by Administrator ID {admin_user_id}.")
+            return {'success': True}
+        
+        except Exception as e:
+            logger.error(f"Error in sending notification to all civilians: {e}", exc_info=True)
+            return {'error': 'An error occurred during notification dispatch'}
+            
+
+
+
+
+    def send_notification_to_all_support_providers(self, request, admin_user_id, title, message, notification_type='info'):
+
+        """
+        Sends a notification to all support provider users.
+
+        Args:
+            request: The HTTP request object, used to get the administrator's IP address.
+            admin_user_id (int): The ID of the administrator sending the notification.
+            title (str): The title of the notification.
+            message (str): The message content of the notification.
+            notification_type (str): The type of the notification (default is 'info').
+
+        Returns:
+            dict: A response indicating success or an error message.
+        """
+
+        try:
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to send notifications.")
+                return {'error': 'Permission denied'}
+
+            support_providers = User.objects.filter(groups__name='SupportProvider')
+            for support_provider in support_providers:
+                self.dal.create(Notification, 
+                                recipient=support_provider, 
+                                title=title, 
+                                message=message,
+                                notification_type=notification_type)
+
+            # Log the action
+            user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+            self.dal.create(UserActivity, user=admin_user, activity_type='notification_sent', ip_address=user_ip)
+
+            logger.info(f"Notification sent to all support providers by Administrator ID {admin_user_id}.")
+            return {'success': True}
+        
+        except Exception as e:
+            logger.error(f"Error in sending notification to all support providers: {e}", exc_info=True)
+            return {'error': 'An error occurred during notification dispatch'}
+
+
+
+
+    def activate_user(self, request, admin_user_id, user_id_to_activate):
+
+        """
+        Activates a user account.
+
+        Args:
+            request: The HTTP request object, used to get the administrator's IP address.
+            admin_user_id (int): The ID of the administrator performing the activation.
+            user_id_to_activate (int): The ID of the user whose account is to be activated.
+
+        Returns:
+            dict: A response indicating success or an error message.
+        """
+
+        try:
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to activate users.")
+                return {'error': 'Permission denied'}
+
+            user_to_activate = self.dal.get_by_id(User, user_id_to_activate)
+            if user_to_activate.is_active:
+                logger.warning(f"User ID {user_id_to_activate} is already active.")
+                return {'error': 'User already active'}
+
+            user_to_activate.is_active = True
+            user_to_activate.save()
+
+            # Log the action
+            user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+            self.dal.create(UserActivity, user=admin_user, activity_type='account_activated', ip_address=user_ip, description=f"Activated user ID {user_id_to_activate}")
+
+            logger.info(f"User ID {user_id_to_activate} activated by Administrator ID {admin_user_id}.")
+            return {'success': True}
+        
+        except Exception as e:
+            logger.error(f"Error in activating user ID {user_id_to_activate}: {e}", exc_info=True)
+            return {'error': 'An error occurred during user activation'}
+
+
+
+    def deactivate_user(self, request, admin_user_id, user_id_to_deactivate):
+
+        """
+        Deactivates a user account.
+
+        Args:
+            request: The HTTP request object, used to get the administrator's IP address.
+            admin_user_id (int): The ID of the administrator performing the deactivation.
+            user_id_to_deactivate (int): The ID of the user whose account is to be deactivated.
+
+        Returns:
+            dict: A response indicating success or an error message.
+        """
+
+        try:
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to deactivate users.")
+                return {'error': 'Permission denied'}
+
+            user_to_deactivate = self.dal.get_by_id(User, user_id_to_deactivate)
+            if not user_to_deactivate.is_active:
+                logger.warning(f"User ID {user_id_to_deactivate} is already inactive.")
+                return {'error': 'User already inactive'}
+
+            user_to_deactivate.is_active = False
+            user_to_deactivate.save()
+
+            # Log the action
+            user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+            self.dal.create(UserActivity, user=admin_user, activity_type='account_deactivated_by_admin', ip_address=user_ip, description=f"Deactivated user ID {user_id_to_deactivate}")
+
+            logger.info(f"User ID {user_id_to_deactivate} deactivated by Administrator ID {admin_user_id}.")
+            return {'success': True}
+        
+        except Exception as e:
+            logger.error(f"Error in deactivating user ID {user_id_to_deactivate}: {e}", exc_info=True)
+            return {'error': 'An error occurred during user deactivation'}
+
+
+
+
+
+
+    def clear_specific_access_attempts(self, request, admin_user_id, ip_address):
+
+        """
+        Clears access attempts for a specific IP address from the Axes AccessAttempt table.
+
+        Args:
+            request: The HTTP request object, used to get the administrator's IP address.
+            admin_user_id (int): The ID of the administrator performing the operation.
+            ip_address (str): The IP address for which the access attempts are to be cleared.
+
+        Returns:
+            dict: A response indicating success or an error message.
         """
         try:
-            user = User.objects.get(id=user_id)
-            user.is_active = True
-            user.save()
-            return True
-        except User.DoesNotExist:
-            return False
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to clear access attempts.")
+                return {'error': 'Permission denied'}
 
-    def suspend_user(self, user_id):
+            # Clear access attempts for the specified IP address
+            AccessAttempt.objects.filter(ip_address=ip_address).delete()
+
+            # Log the action
+            admin_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+            self.dal.create(UserActivity, user=admin_user, activity_type='access_attempts_cleared', ip_address=admin_ip, description=f"Cleared access attempts for IP {ip_address}")
+
+            logger.info(f"Access attempts for IP {ip_address} cleared by Administrator ID {admin_user_id}.")
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error in clearing access attempts for IP {ip_address}: {e}", exc_info=True)
+            return {'error': 'An error occurred during the clearing of access attempts'}
+
+
+
+    def activate_shelter(self, request, admin_user_id, shelter_id):
+
         """
-        Suspends a user account, restricting their access to the system.
+        Activates a shelter. Only administrators can perform this action.
+
+        Args:
+            request: The HTTP request object, used to get the administrator's IP address.
+            admin_user_id (int): The ID of the administrator performing the action.
+            shelter_id (int): The ID of the shelter to be activated.
+
+        Returns:
+            dict: A response indicating success or an error message.
         """
+
         try:
-            user = User.objects.get(id=user_id)
-            user.is_active = False
-            user.save()
-            return True
-        except User.DoesNotExist:
-            return False
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to activate shelter.")
+                return {'error': 'Permission denied'}
 
-    def activate_support_provider(self, provider_id):
+            shelter = self.dal.get_by_id(Shelter, shelter_id)
+            if shelter:
+                shelter.is_active = True
+                shelter.save()
+
+                # Log the action
+                admin_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+                self.dal.create(UserActivity, user=admin_user, activity_type='shelter_activated', ip_address=admin_ip, description=f"Activated shelter ID {shelter_id}")
+
+                logger.info(f"Shelter ID {shelter_id} activated by Administrator ID {admin_user_id}.")
+                return {'success': True}
+            else:
+                logger.warning(f"No shelter found with ID {shelter_id}.")
+                return {'error': 'Shelter not found'}
+
+        except Exception as e:
+            logger.error(f"Error in activating shelter ID {shelter_id}: {e}", exc_info=True)
+            return {'error': 'An error occurred during the activation of the shelter'}
+
+
+
+
+    def deactivate_shelter(self, request, admin_user_id, shelter_id):
+
         """
-        Activates a support provider account.
+        Deactivates a shelter. Only administrators can perform this action.
+
+        Args:
+            request: The HTTP request object, used to get the administrator's IP address.
+            admin_user_id (int): The ID of the administrator performing the action.
+            shelter_id (int): The ID of the shelter to be deactivated.
+
+        Returns:
+            dict: A response indicating success or an error message.
         """
+
         try:
-            provider = SupportProvider.objects.get(id=provider_id)
-            provider.is_active = True
-            provider.save()
-            return True
-        except SupportProvider.DoesNotExist:
-            return False
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to deactivate shelter.")
+                return {'error': 'Permission denied'}
 
-    def review_shelter_application(self, shelter_id, approval_status):
+            shelter = self.dal.get_by_id(Shelter, shelter_id)
+            if shelter:
+                shelter.is_active = False
+                shelter.save()
+
+                # Log the action
+                admin_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+                self.dal.create(UserActivity, user=admin_user, activity_type='shelter_deactivated', ip_address=admin_ip, description=f"Deactivated shelter ID {shelter_id}")
+
+                logger.info(f"Shelter ID {shelter_id} deactivated by Administrator ID {admin_user_id}.")
+                return {'success': True}
+            else:
+                logger.warning(f"No shelter found with ID {shelter_id}.")
+                return {'error': 'Shelter not found'}
+
+        except Exception as e:
+            logger.error(f"Error in deactivating shelter ID {shelter_id}: {e}", exc_info=True)
+            return {'error': 'An error occurred during the deactivation of the shelter'}
+
+
+
+
+
+
+    def monitor_user_activity(self, admin_user_id, user_id):
+
         """
-        Reviews and updates the status of a shelter application.
+        Fetches the activity log for a specific user. Only administrators can access this method.
+
+        Args:
+            request: The HTTP request object, used to get the administrator's IP address.
+            admin_user_id (int): The ID of the administrator performing the action.
+            user_id (int): The ID of the user whose activity log is to be fetched.
+
+        Returns:
+            list: A list of dictionaries containing details of each user activity or an error message.
         """
+
         try:
-            shelter = Shelter.objects.get(id=shelter_id)
-            shelter.is_approved = approval_status  # Assuming there is an 'is_approved' field
-            shelter.save()
-            return True
-        except Shelter.DoesNotExist:
-            return False
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to monitor user activity.")
+                return {'error': 'Permission denied'}
 
-    def generate_reports(self, report_type):
-        """
-        Generates various reports based on the type specified.
-        """
-        # Example implementation - adjust according to your application's reporting needs
-        if report_type == "user_activity":
-            return UserActivity.objects.all()
-        # Additional report types can be added here
-        return None
+            target_user = self.dal.get_by_id(User, user_id)
+            if not target_user:
+                logger.warning(f"No user found with ID {user_id}.")
+                return {'error': 'User not found'}
 
-    def manage_roles_permissions(self, user_id, roles):
+            activities = self.dal.filter(UserActivity, user=target_user).order_by('-timestamp') # activities are sorted in descending order of their timestamp.
+            activity_log = [{
+                'activity_type': activity.activity_type,
+                'timestamp': activity.timestamp,
+                'ip_address': activity.ip_address
+            } for activity in activities]
+
+            logger.info(f"User activities fetched for user ID {user_id} by Administrator ID {admin_user_id}.")
+            return activity_log
+
+        except Exception as e:
+            logger.error(f"Error fetching user activities for user ID {user_id}: {e}", exc_info=True)
+            return {'error': 'An error occurred while fetching user activities'}
+
+
+
+
+    def admin_initiated_password_reset(self, admin_user_id, user_id_to_reset, request):
+
         """
-        Manages roles and permissions for a user.
+        Allows an administrator to initiate the password reset process for a user.
+
+        Args:
+            admin_user_id (int): The ID of the administrator performing the reset.
+            user_id_to_reset (int): The ID of the user whose password is to be reset.
+            request: The HTTP request object, used to get the administrator's IP address.
+
+        Returns:
+            dict: A response indicating success or an error message.
         """
+
         try:
-            user = User.objects.get(id=user_id)
-            user.groups.set(roles)  # Assuming roles are managed using Django's Group model
-            return True
-        except User.DoesNotExist:
-            return False
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                return {'error': 'Permission denied'}
 
-    def handle_complaints_feedback(self, feedback_id, action):
+            user_to_reset = self.dal.get_by_id(User, user_id_to_reset)
+            if not user_to_reset:
+                return {'error': 'User not found'}
+
+            # Assuming the use of a function like can_request_password_reset() to check eligibility
+            if not can_request_password_reset(user_to_reset):
+                return {'error': 'Password reset not allowed for this user'}
+
+            # Use the existing reset password logic
+            token = request_password_reset(user_to_reset, request)
+            uid = urlsafe_base64_encode(force_bytes(user_to_reset.pk))
+            reset_link = f"https://your-frontend-domain.com{reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})}"
+
+            send_mail(
+                subject='Password Reset Request',
+                message=f"Please click on the link to reset your password: {reset_link}",
+                from_email='Rachel.for.Israel@gmail.com',
+                recipient_list=[user_to_reset.email],
+                fail_silently=False,
+            )
+
+            # Log the action
+            admin_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+            self.dal.create(UserActivity, user=admin_user, activity_type='password_reset_request', ip_address=admin_ip, description=f"Password reset initiated for user ID {user_id_to_reset}")
+
+            return {'success': 'Password reset email sent successfully'}
+
+        except Exception as e:
+            logger.error(f"Error in admin_initiated_password_reset method: {e}")
+            return {'error': 'An error occurred during the password reset process'}
+
+
+
+    def search_users(self, admin_user_id, search_criteria):
+        
         """
-        Handles complaints and feedback from users.
+        Dynamically searches and filters users based on a variety of criteria such as username, email, role, etc.
+        This method builds a query dynamically based on the criteria provided by the frontend and uses the DAL for database operations.
+
+        Args:
+            admin_user_id (int): The ID of the administrator performing the search.
+            search_criteria (dict): A dictionary containing the criteria to filter users by.
+
+        Returns:
+            list: List of users matching the criteria or an error message.
         """
-        # This is a placeholder method; implementation depends on how feedback/complaints are managed
-        pass
+
+        try:
+            # Validate admin user using DAL
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user or not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User {admin_user_id} attempted to search without permission.")
+                return {'error': 'Permission denied'}
+
+            # Build dynamic query based on search criteria
+            query_kwargs = {f"{key}__icontains": value for key, value in search_criteria.items()}
+
+            # Execute query using DAL
+            users = self.dal.filter(User, **query_kwargs)
+
+            # Check if no users are found
+            if not users:
+                logger.info(f"No users found for search criteria: {search_criteria}")
+
+            # Construct the response
+            user_list = [{'username': user.username, 'email': user.email, 'role': [group.name for group in user.groups.all()]} for user in users]
+            return user_list
+
+        except Exception as e:
+            logger.error(f"Error in searching users: {e}", exc_info=True)
+            return {'error': str(e)}
+        
+
+
+
+    def generate_lowest_rated_support_provider_report(self, admin_user_id):
+
+        """
+        Generates a report for the lowest-rated support provider.
+
+        Args:
+            admin_user_id (int): The ID of the administrator requesting the report.
+
+        Returns:
+            dict: A dictionary containing the data of the lowest-rated support provider or an error message.
+
+        Raises:
+            Exception: If an unexpected error occurs during report generation.
+        """
+
+        try:
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to generate reports.")
+                return {'error': 'Permission denied'}
+
+            # Assuming 'rating' field exists in SupportProvider model
+            lowest_rated_provider = SupportProvider.objects.order_by('rating').first()
+
+            if not lowest_rated_provider:
+                return {'message': 'No support providers available for reporting.'}
+
+            feedbacks = self.dal.filter(UserFeedback, support_provider=lowest_rated_provider)
+            responded_feedbacks = feedbacks.filter(response__isnull=False)
+
+            report = {
+                'support_provider': lowest_rated_provider.user.username,
+                'total_feedback': feedbacks.count(),
+                'responded_feedback': responded_feedbacks.count(),
+                'average_rating': lowest_rated_provider.rating
+            }
+
+            logger.info(f"Lowest Rated Support Provider Report generated by Administrator ID {admin_user_id}.")
+            return report
+
+        except Exception as e:
+            logger.error(f"Error generating Lowest Rated Support Provider Report: {e}", exc_info=True)
+            return {'error': 'An error occurred during report generation'}
+
+
+
+
+    def generate_highest_rated_support_provider_report(self, admin_user_id):
+
+        """
+        Generates a report for the highest-rated support provider.
+
+        Args:
+            admin_user_id (int): The ID of the administrator requesting the report.
+
+        Returns:
+            dict: A dictionary containing the data of the highest-rated support provider or an error message.
+
+        Raises:
+            Exception: If an unexpected error occurs during report generation.
+        """
+
+        try:
+            admin_user = self.dal.get_by_id(User, admin_user_id)
+            if not admin_user.groups.filter(name='Administrator').exists():
+                logger.warning(f"User ID {admin_user_id} is not authorized to generate reports.")
+                return {'error': 'Permission denied'}
+
+            highest_rated_provider = SupportProvider.objects.order_by('-rating').first()
+
+            if not highest_rated_provider:
+                return {'message': 'No support providers available for reporting.'}
+
+            feedbacks = self.dal.filter(UserFeedback, support_provider=highest_rated_provider)
+            responded_feedbacks = feedbacks.filter(response__isnull=False)
+
+            report = {
+                'support_provider': highest_rated_provider.user.username,
+                'total_feedback': feedbacks.count(),
+                'responded_feedback': responded_feedbacks.count(),
+                'average_rating': highest_rated_provider.rating
+            }
+
+            logger.info(f"Highest Rated Support Provider Report generated by Administrator ID {admin_user_id}.")
+            return report
+
+        except Exception as e:
+            logger.error(f"Error generating Highest Rated Support Provider Report: {e}", exc_info=True)
+            return {'error': 'An error occurred during report generation'}
+   
