@@ -2,7 +2,7 @@
 import logging
 from Rachel.DAL import DAL
 from .base_facade import BaseFacade
-from Rachel.models import User, SupportProvider, FeedbackResponse, UserFeedback,UserActivity,Shelter
+from Rachel.models import User, SupportProvider, FeedbackResponse, UserFeedback,UserActivity,Shelter,Notification
 
 
 
@@ -23,6 +23,7 @@ class SupportProviderFacade(BaseFacade):
 
 
     def respond_to_feedback(self, support_provider_id, feedback_id, response_text, request):
+
         """
         Allows a support provider to respond to feedback specifically related to them.
 
@@ -35,16 +36,14 @@ class SupportProviderFacade(BaseFacade):
         Returns:
             dict: A response indicating success or error message.
         """
+
         try:
             # Retrieve the feedback and the support provider using DAL
             feedback = self.dal.get_by_id(UserFeedback, feedback_id)
-            if feedback:
-                feedback.status = 'responded'
-                feedback.save()
             support_provider = self.dal.get_by_id(SupportProvider, support_provider_id)
 
             # Check if feedback is related to this support provider
-            if feedback and feedback.target_support_provider_id != support_provider_id:
+            if not feedback or feedback.support_provider != support_provider:
                 logger.warning(f"Support Provider {support_provider_id} not authorized to respond to feedback {feedback_id}.")
                 return {'error': 'Not authorized to respond to this feedback'}
 
@@ -57,9 +56,23 @@ class SupportProviderFacade(BaseFacade):
             feedback_response = self.dal.create(FeedbackResponse, **response_data)
 
             if feedback_response:
+                # Update the feedback status
+                feedback.status = 'responded'
+                feedback.save()
+
                 # Log the user activity for feedback response submission
                 user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
                 self.dal.create(UserActivity, user=support_provider.user, activity_type='feedback_responded', ip_address=user_ip)
+                
+                # Send notification to the civilian who submitted the feedback
+                self.dal.create(
+                    Notification,
+                    recipient=feedback.user,
+                    title="Feedback Response",
+                    message=f"Your feedback has been responded to by {support_provider.user.username}.",
+                    notification_type='feedback'
+                )
+
                 logger.info(f"Feedback {feedback_id} responded by Support Provider {support_provider_id}.")
                 return {'success': True}
 
@@ -68,6 +81,7 @@ class SupportProviderFacade(BaseFacade):
         except Exception as e:
             logger.error(f"Error in responding to feedback by Support Provider {support_provider_id}: {e}", exc_info=True)
             return {'error': str(e)}
+
         
 
     
