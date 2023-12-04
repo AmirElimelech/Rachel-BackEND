@@ -99,7 +99,7 @@ class CivilianFacade(BaseFacade):
 
 
 
-    def send_feedback(self, user_id, feedback_text, request):
+    def send_feedback(self, user_id, feedback_text, support_provider_id, request):
 
         """
         Allows a civilian to submit feedback and logs the activity.
@@ -107,6 +107,7 @@ class CivilianFacade(BaseFacade):
         Args:
             user_id (int): The ID of the user submitting the feedback.
             feedback_text (str): The text of the feedback being submitted.
+            support_provider_id (int): The ID of the support provider to whom the feedback is directed.
             request: The HTTP request object for getting the IP address.
 
         Returns:
@@ -122,6 +123,7 @@ class CivilianFacade(BaseFacade):
             if feedback_form.is_valid():
                 user_feedback = UserFeedback(
                     user_id=user_id,
+                    support_provider_id=support_provider_id,
                     feedback_text=feedback_form.cleaned_data['feedback_text']
                 )
                 user_feedback.save()
@@ -132,6 +134,17 @@ class CivilianFacade(BaseFacade):
 
                 logger.info(f"Feedback submitted successfully by user ID {user_id}.")
                 feedback_submission_successful = True  # Set the variable to True if feedback submission is successful
+
+                # Send notification to the Support Provider about the new feedback
+                support_provider = self.dal.get_by_id(SupportProvider, support_provider_id)
+                if support_provider:
+                    self.dal.create(
+                        Notification,
+                        recipient=support_provider.user,
+                        title="New Feedback Received",
+                        message=f"You have received new feedback from {user_feedback.user.username}.",
+                        notification_type='feedback'
+                    )
             else:
                 logger.warning(f"Feedback form validation errors: {feedback_form.errors.as_json()}")
 
@@ -139,7 +152,66 @@ class CivilianFacade(BaseFacade):
             logger.error(f"Unexpected error during feedback submission by user ID {user_id}: {e}", exc_info=True)
             raise
 
-        return feedback_submission_successful  
+        return feedback_submission_successful
+
+
+
+
+
+    def rate_support_provider(self, user_id, support_provider_id, rating, experience, request):
+
+        """
+        Allows a user to rate a support provider and write about their experience.
+
+        Args:
+            user_id (int): The ID of the user submitting the rating.
+            support_provider_id (int): The ID of the support provider being rated.
+            rating (int): The rating given by the user.
+            experience (str): The user's experience with the support provider.
+            request: The HTTP request object for getting the IP address.
+
+        Returns:
+            bool: True if the rating and experience submission is successful, False otherwise.
+        """
+         
+        try:
+            user = self.dal.get_by_id(User, user_id)
+            support_provider = self.dal.get_by_id(SupportProvider, support_provider_id)
+
+            # Create or update the rating
+            rating_obj, created = SupportProviderRating.objects.get_or_create(
+                user=user,
+                support_provider=support_provider,
+                defaults={'rating': rating, 'experience': experience}
+            )
+
+            if not created:
+                rating_obj.rating = rating
+                rating_obj.experience = experience
+                rating_obj.save()
+
+            # Update the average rating of the support provider
+            support_provider.update_average_rating()
+
+            # Log the user activity
+            user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+            self.dal.create(UserActivity, user=user, activity_type='support_provider_rated', ip_address=user_ip)
+
+            self.dal.create(
+            Notification,
+            recipient=support_provider.user,
+            title="New Rating Received",
+            message=f"You have received a new rating from {user.username}.",
+            notification_type='rating'
+            )
+            
+
+            return True
+        except Exception as e:
+            logger.error(f"Error in rate_support_provider: {e}")
+            return False
+        
+
 
 
 
@@ -243,49 +315,7 @@ class CivilianFacade(BaseFacade):
 
 
 
-    def rate_support_provider(self, user_id, support_provider_id, rating, experience, request):
-
-        """
-        Allows a user to rate a support provider and write about their experience.
-
-        Args:
-            user_id (int): The ID of the user submitting the rating.
-            support_provider_id (int): The ID of the support provider being rated.
-            rating (int): The rating given by the user.
-            experience (str): The user's experience with the support provider.
-            request: The HTTP request object for getting the IP address.
-
-        Returns:
-            bool: True if the rating and experience submission is successful, False otherwise.
-        """
-         
-        try:
-            user = self.dal.get_by_id(User, user_id)
-            support_provider = self.dal.get_by_id(SupportProvider, support_provider_id)
-
-            # Create or update the rating
-            rating_obj, created = SupportProviderRating.objects.get_or_create(
-                user=user,
-                support_provider=support_provider,
-                defaults={'rating': rating, 'experience': experience}
-            )
-
-            if not created:
-                rating_obj.rating = rating
-                rating_obj.experience = experience
-                rating_obj.save()
-
-            # Update the average rating of the support provider
-            support_provider.update_average_rating()
-
-            # Log the user activity
-            user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
-            self.dal.create(UserActivity, user=user, activity_type='support_provider_rated', ip_address=user_ip)
-
-            return True
-        except Exception as e:
-            logger.error(f"Error in rate_support_provider: {e}")
-            return False
+    
         
 
     def address_lookup(self, user_id, query, request):
@@ -324,53 +354,6 @@ class CivilianFacade(BaseFacade):
         except Exception as e:
             logger.error(f"Error during address lookup for query: {query}: {e}", exc_info=True)
             return {'error': 'An error occurred during the address lookup'}
-        
-
-    def notify_rate_and_feedback(self, support_provider_id, user_id, notification_type, request):
-
-        """
-        Creates a notification for a support provider when they receive a new rating or feedback.
-
-        Args:
-            support_provider_id (int): The ID of the support provider being notified.
-            user_id (int): The ID of the user who submitted the rating or feedback.
-            notification_type (str): Type of notification ('rating' or 'feedback').
-            request: The HTTP request object for getting the IP address.
-
-        Returns:
-            bool: True if the notification is successfully created, False otherwise.
-        """
-
-        try:
-            support_provider = self.dal.get_by_id(SupportProvider, support_provider_id)
-            civilian_user = self.dal.get_by_id(User, user_id)
-
-            if not support_provider or not civilian_user:
-                logger.warning(f"Invalid support provider or civilian user ID.")
-                return False
-
-            # Define notification title and message based on the notification type
-            title = f"New {notification_type.title()} Received"
-            if notification_type == 'rating':
-                message = f"You have received a new rating from {civilian_user.username}."
-            elif notification_type == 'feedback':
-                message = f"You have received new feedback from {civilian_user.username}."
-            else:
-                logger.error(f"Invalid notification type: {notification_type}")
-                return False
-
-            # Create the notification
-            notification = self.dal.create(Notification, 
-                                        recipient=support_provider.user, 
-                                        title=title, 
-                                        message=message)
-
-            return notification is not None
-
-        except Exception as e:
-            logger.error(f"Error in notify_rate_and_feedback method: {e}", exc_info=True)
-            return False
-        
         
 
 
