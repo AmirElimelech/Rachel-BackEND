@@ -9,7 +9,7 @@ from django.db.models.signals import post_save
 from axes.helpers import get_client_ip_address
 from django.contrib.auth import  get_user_model
 from .utils import alert_for_suspicious_activity
-from .models import User, Shelter, UserActivity , Group , SupportProvider ,Civilian
+from .models import User, Shelter, UserActivity , SupportProvider ,Civilian, Notification
 from django.contrib.auth.signals import user_logged_in, user_login_failed , user_logged_out
 
 
@@ -58,17 +58,16 @@ def create_shelter_signal(sender, instance, created, **kwargs):
 
                     if new_shelter:
                         logger.info(f"New shelter created: {new_shelter.name}. Sending notification to administrators.")
-                        admin_group = dal.get_by_field(Group, name='Administrator')
-                        if admin_group:
-                            admin_emails = [user.email for user in admin_group.user_set.all() if user.email]
-
-                            # Send email to all administrators
-                            send_mail(
-                                'New Shelter Registration',
-                                f'A new shelter {new_shelter.name} has been created and needs review.',
-                                'Rachel.for.Israel@gmail.com',
-                                admin_emails,
-                                fail_silently=False,
+                        
+                        # Send 'new_shelter' notification to all administrators
+                        admin_users = dal.filter(User, groups__name='Administrator')
+                        for admin in admin_users:
+                            dal.create(
+                                Notification,
+                                recipient=admin,
+                                title="New Shelter Registration",
+                                message=f"A new shelter '{new_shelter.name}' has been created and needs review.",
+                                notification_type='new_shelter'
                             )
 
                         logger.info(f"Notification sent for new shelter: {new_shelter.name}")
