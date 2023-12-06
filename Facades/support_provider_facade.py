@@ -176,7 +176,7 @@ class SupportProviderFacade(BaseFacade):
                 'feedback_id': feedback.id,
                 'user': feedback.user.username,
                 'feedback_text': feedback.feedback_text,
-                'created_at': feedback.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                'created_at': feedback.created_at.strftime("%d-%m-%Y %H:%M:%S"),
                 'status': getattr(feedback, 'status', 'pending')  # Assuming a 'status' field
             } for feedback in feedbacks]
 
