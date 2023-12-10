@@ -4,14 +4,13 @@
 from datetime import date
 from django.db import  models
 from django_cryptography.fields import encrypt
-from .core_models import TimestampedModel , City
 from django_countries.fields import CountryField
 from .support_models import SupportProviderRating
 from django.contrib.auth.models import User, Group
 from django.core.exceptions import  ValidationError
 from simple_history.models import HistoricalRecords
 from django.utils.translation import  gettext_lazy  as _
-from phonenumber_field.modelfields import PhoneNumberField
+from .core_models import TimestampedModel , City, Country
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 
@@ -54,7 +53,7 @@ class CommonUserProfile(TimestampedModel):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     identification_number = models.CharField(max_length=20, unique=True, blank=False, null=False, help_text=_("Enter your national identification number."))
     id_type = models.CharField(max_length=30, choices=ID_TYPE_CHOICES, blank=False, null=False, help_text=_("Type of identification (e.g., 'Israeli ID', 'Passport')."))
-    country_of_issue = CountryField(blank=False, null=False, default='IL',  help_text=_("Country of issue of the identification."))
+    country_of_issue = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True)
     languages_spoken = models.ManyToManyField('Language', blank=True)
     active_until = models.DateField(null=True, blank=True)
     address = encrypt(models.CharField(max_length=200, blank=True, null=True))
@@ -67,7 +66,7 @@ class CommonUserProfile(TimestampedModel):
         )    
     city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True)
     country = CountryField(blank_label='(select country)', blank=True)
-    phone_number = PhoneNumberField(blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=False, null=False)
     terms_accepted = models.BooleanField(default=False, verbose_name=_("Terms Accepted"))
 
     class Meta:
@@ -82,7 +81,7 @@ class CommonUserProfile(TimestampedModel):
             errors['languages_spoken'] = _("At least one language must be spoken.")
 
         if self.active_until and self.active_until < date.today():
-            errors['active_until'] = _("The active until date cannot be in the past.")
+            errors['active_until'] = _("The active until date cannot be in the past.") 
 
         if not self.phone_number:
             errors['phone_number'] = _("A phone number is required.")
@@ -118,6 +117,7 @@ def get_default_role_civilian():
 #Civilian model
 
 class Civilian(CommonUserProfile):
+    
     """
     Model representing civilian users in the application.
 
