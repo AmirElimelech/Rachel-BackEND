@@ -1,3 +1,4 @@
+import logging
 from django.contrib import admin
 from .models import (
     Country,
@@ -19,9 +20,40 @@ from .models import (
     UnauthorizedAccessAttempt,
     ConfirmationCode
 )
+from django.core.mail import EmailMessage
+from django.contrib.auth.models import User
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+
+logger = logging.getLogger(__name__)
 
 
 
+# Custom UserAdmin
+class UserAdmin(BaseUserAdmin):
+    def save_model(self, request, obj, form, change):
+        # Check if 'is_active' has changed to True
+        is_activating = 'is_active' in form.changed_data and obj.is_active
+
+        # Save the user object
+        super().save_model(request, obj, form, change)
+
+        # If 'is_active' changed to True, send the activation email
+        if is_activating:
+            # Your email sending logic
+            subject = 'Account Activated'
+            body = f'Your account {obj.username} has been activated. You can now login, thank you.'
+            message = EmailMessage(
+                subject=subject,
+                body=body,
+                from_email='your_email@example.com',
+                to=[obj.email],  # Ensure this is a list
+            )
+            message.send()
+            logger.info(f"Account activation email successfully sent to: {obj.email}")
+
+# Unregister the original User admin and register the custom one
+admin.site.unregister(User)
+admin.site.register(User, UserAdmin)
 
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
