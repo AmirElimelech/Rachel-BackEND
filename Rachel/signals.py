@@ -101,11 +101,11 @@ def account_activation_notification(sender, instance, created, **kwargs):
     :param kwargs: Additional keyword arguments.
     """
     try:
-        # Check if the account is newly created or if the is_active status is changed to True
-        # if (created and instance.is_active) or (not created and instance.is_active):
-        update_fields = kwargs.get('update_fields')
-        if created or (update_fields is not None and 'is_active' in update_fields):
+        # Ensure that 'update_fields' is iterable, even if it's None
+        update_fields = kwargs.get('update_fields') or []
 
+        # If 'is_active' is in the updated fields and is True, send the email
+        if 'is_active' in update_fields and instance.is_active:
             # Log the initiation of the email sending process
             logger.info(f"Attempting to send account activation email to: {instance.email}")
 
