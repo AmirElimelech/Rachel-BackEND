@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.contrib.auth.models import User
 from Rachel.models import (Country, City, Language,
                            UserActivity, UserFeedback, FeedbackResponse, Notification,
                            AddressLookup, SearchHistory, UnauthorizedAccessAttempt,
@@ -7,6 +8,11 @@ from Rachel.models import (Country, City, Language,
                            Civilian, Intentions, SupportProviderCategory, SupportProviderRating )
 
 
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name']
 
 
 class CountrySerializer(serializers.ModelSerializer):
@@ -52,15 +58,6 @@ class CommonUserProfileSerializer(serializers.ModelSerializer):
         model = CommonUserProfile
         fields = ['user', 'identification_number', 'id_type', 'country_of_issue', 'languages_spoken', 'active_until', 'address', 'profile_picture', 'city', 'country', 'phone_number', 'terms_accepted']
 
-class CivilianSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Civilian
-        fields = '__all__'
-
-class SupportProviderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SupportProvider
-        fields = '__all__'
 
 class AdministratorSerializer(serializers.ModelSerializer):
     class Meta:
@@ -117,4 +114,28 @@ class ShelterSerializer(serializers.ModelSerializer):
 class SupportProviderRatingSerializer(serializers.ModelSerializer):
     class Meta:
         model = SupportProviderRating
+        fields = '__all__'
+        
+
+
+class CivilianProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Civilian
+        fields = '__all__' 
+
+class SupportProviderProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupportProvider
+        fields = '__all__'
+
+
+
+class CivilianSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Civilian
+        fields = '__all__'
+
+class SupportProviderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupportProvider
         fields = '__all__'
