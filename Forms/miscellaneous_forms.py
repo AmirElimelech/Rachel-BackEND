@@ -14,55 +14,71 @@ from django.utils.translation import gettext_lazy as _
 
 
 class ContactForm(forms.Form):
+
+    """
+    Form for handling 'Contact Us' submissions.
+
+    This form collects a user's name, email, subject, and message for contact inquiries.
+    It includes validations for each field, such as presence, length, and content checks,
+    to ensure that the submitted data is appropriate and informative.
+    """
+
     name = forms.CharField(
-    max_length=100, 
-    required=True, 
-    widget=forms.TextInput(attrs={'placeholder': 'Your Name'})
+        max_length=100,
+        required=True,
+        widget=forms.TextInput(attrs={'placeholder': 'Your Name'}),
+        error_messages={'required': "Name is required."}
     )
     email = forms.EmailField(
-    required=True, 
-    widget=forms.EmailInput(attrs={'placeholder': 'Your Email'}),
-    validators=[EmailValidator(message=_("Enter a valid email address."))]
+        required=True,
+        widget=forms.EmailInput(attrs={'placeholder': 'Your Email'}),
+        validators=[EmailValidator(message=_("Enter a valid email address."))],
+        error_messages={'required': "Email is required."}
     )
     subject = forms.CharField(
-    max_length=150, 
-    required=True, 
-    widget=forms.TextInput(attrs={'placeholder': 'Subject'})
+        max_length=150,
+        required=True,
+        widget=forms.TextInput(attrs={'placeholder': 'Subject'}),
+        error_messages={'required': "Subject cannot be empty."}
     )
     message = forms.CharField(
-    max_length=750, 
-    widget=forms.Textarea(attrs={'placeholder': 'Your Message'}), 
-    required=True
-    )     
+        max_length=750,
+        widget=forms.Textarea(attrs={'placeholder': 'Your Message'}),
+        required=True,
+        error_messages={'required': "Message cannot be empty."}
+    )
 
     def clean_email(self):
         email = self.cleaned_data.get('email')
-        # Add any specific email validations here if necessary
         return email
-    
+
+    def clean_subject(self):
+        subject = self.cleaned_data.get('subject')
+        if len(subject) < 5:
+            raise forms.ValidationError("Subject must be at least 5 characters long.")
+        return subject
+
     def clean_message(self):
         message = self.cleaned_data.get('message')
+        if not message.strip():
+            raise forms.ValidationError("Message text cannot be empty.")
+
+        if len(message) < 10:
+            raise forms.ValidationError("Message too short. Please send a valid message that is at least 10 characters long.")
+
         if profanity.contains_profanity(message):
             raise ValidationError("Please avoid using inappropriate language in your message.")
-        
-        if len(message) < 20:  # Example minimum length
-            raise ValidationError("Response text must be at least 20 characters long.")
-       
-    
-        if not message.strip():
-            raise ValidationError("Response text cannot be empty.")
-    
+
         return message
 
     def clean(self):
-        # Basic clean method without additional cross-field validation
-        return super().clean()
-
-    
+        # Basic clean method
+        return super().clean()    
 
 
 
 class ShelterForm(forms.ModelForm):
+
     """
     Form for creating and updating Shelter details. This form includes fields for the shelter's name,
     address, geographic location (city, country, latitude, longitude), capacity, and a picture.
@@ -115,6 +131,7 @@ class ShelterForm(forms.ModelForm):
 
 
 class ShelterUpdateForm(forms.ModelForm):
+    
     """
     Form for updating existing Shelter details, restricting updates to picture and capacity only.
     """
