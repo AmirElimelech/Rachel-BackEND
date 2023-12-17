@@ -124,3 +124,8 @@ settings.py
 
 Rachel/migrations/
 
+
+ProjectRachel/__pycache__/__init__.cpython-311.pyc
+ProjectRachel/__pycache__/settings.cpython-311.pyc
+
+
