@@ -3,7 +3,6 @@
 import logging
 from Rachel.DAL import DAL
 from django.urls import reverse
-
 from django.core.mail  import  send_mail
 from django.contrib.auth.models import User 
 from django.utils.encoding import force_bytes
@@ -17,7 +16,7 @@ from django.utils.http import   urlsafe_base64_encode
 from django.contrib.auth import    authenticate, login
 from django.utils.translation  import gettext_lazy as  _
 from Forms.support_provider_forms import SupportProviderRegisterForm
-from Rachel.utils import alert_for_suspicious_activity , request_password_reset , can_request_password_reset
+from Rachel.utils import alert_for_suspicious_activity , request_password_reset , can_request_password_reset, delete_outdated_password_reset_requests
 
 
 
@@ -65,14 +64,20 @@ class AnonymousFacade:
 
         try:
             with transaction.atomic():
+
+
                 if user_type == 'civilian':
                     form = CivilianRegisterForm(form_data)
+
                 elif user_type == 'support_provider':
                     form = SupportProviderRegisterForm(form_data)
+                    logger.info(f"Support Provider registration form data: {form_data}")
+
                 else:
                     raise ValueError(f"Invalid user type: {user_type}")
 
                 if form.is_valid():
+                    logger.info("Form is valid, proceeding with registration")
                     user = form.save(commit=True)
                     logger.info(f"User {user.username} ({user_type}) registered successfully")
                     self.dal.create(UserActivity, user=user, activity_type='account_creation', ip_address=user_ip)
@@ -84,7 +89,7 @@ class AnonymousFacade:
                             Notification,
                             recipient=admin,
                             title="New User Registration",
-                            message=f"A new user '{user.username}' has been registered and needs review.",
+                            message=f"A new user '{user.username}' has been registered and needs review.", 
                             notification_type='new_user'
                         )
 
@@ -94,15 +99,45 @@ class AnonymousFacade:
                     logger.warning(f"Form validation errors for {user_type}: {error_messages}")
                     raise ValidationError(form.errors)
 
+
         except IntegrityError as e:
             logger.error(f"Database integrity error during registration of {user_type}: {e}")
-            raise ValidationError("A database integrity error occurred. Please try again.")
+            error_message = str(e)
+
+            if "Duplicate entry" in error_message and "for key" in error_message:
+                try:
+                    field_name_in_error = error_message.split("' for key '")[1]
+                    
+                    # Check for identification_number
+                    if 'identification_number' in field_name_in_error:
+                        raise ValidationError({'identification_number': ["A user with that ID already exists."]})
+
+                    # Check for email
+                    elif 'email' in field_name_in_error:
+                        raise ValidationError({'email': ["A user with that email already exists."]})
+
+                    # Check for phone_number
+                    elif 'phone_number' in field_name_in_error:
+                        raise ValidationError({'phone_number': ["A user with that phone number already exists."]})
+
+                except IndexError:
+                    raise ValidationError({'database': ["A database integrity error occurred. Please try again."]})
+
+            else:
+                raise ValidationError({'database': ["A database integrity error occurred. Please try again."]}) 
+
+
+
         except ValueError as e:
             logger.error(f"Value error during registration of {user_type}: {e}")
+            raise
+        except ValidationError as e:
+            # If a ValidationError is raised, just propagate it
             raise
         except Exception as e:
             logger.error(f"Unexpected error during registration of {user_type}: {e}")
             raise Exception("An unexpected error occurred during registration. Please try again later.")
+
 
         if registration_successful:
             return user  # Return the User object if registration is successful
@@ -182,6 +217,8 @@ class AnonymousFacade:
         form_data = {'name': name, 'email': email, 'subject': subject, 'message': message}
         contact_form = ContactForm(data=form_data)
 
+
+
         if contact_form.is_valid():
             cleaned_data = contact_form.cleaned_data
 
@@ -200,69 +237,61 @@ class AnonymousFacade:
                 )
                 # Log successful email sending
                 logger.info("Email sent successfully , Contact form submitted successfully")
+                return True  # Indicate successful operation
         
             except Exception as e:
                 logger.error(f"Error sending contact form email: {e}")
                 raise Exception("An error occurred while sending your message. Please try again later.")
 
         else:
-            # Log and raise form validation errors
+            # Collect errors and raise ValidationError with structured data
             errors = contact_form.errors.as_json()
             logger.warning(f"Contact form validation errors: {errors}")
-            raise ValidationError("Invalid form data. Please correct the errors and try again.")
+            raise ValidationError(contact_form.errors)
         
 
 
 
 
 
-    def reset_password(self, request, email):
-
+    def reset_password(self, request, email): 
         """
         Initiates the password reset process for a user.
-
-        Args:
-            request: The HTTP request object, used to get the user's IP address.
-            email (str): The email of the user who wants to reset their password.
-
-        Raises:
-            ValidationError: If the email does not exist or other errors occur.
         """
-        
         try:
-            # Check if the user exists and can request a password reset
             user = self.dal.get_by_field(User, email=email)
             if not user:
-                logger.error(f"Password reset requested for non-existing email: {email}")
-                raise Exception("No user associated with this email address.")
+                raise ValidationError({"email": "No user associated with this email address."})
+            
+
+            delete_outdated_password_reset_requests()
 
             if not can_request_password_reset(user):
-                logger.error("Password reset limit reached or token already used.")
-                raise Exception("Password reset limit reached. Please contact support.")
+                raise ValidationError({"email": "Password reset limit reached. Please contact support."})
 
-            # Use the request_password_reset function
             token = request_password_reset(user, request)
 
-            # Encode the user's ID
             uid = urlsafe_base64_encode(force_bytes(user.pk))
+            reset_link = f"https://your-frontend-domain.com/reset-password/{uid}/{token}"
 
-            # Construct the password reset link
-            reset_link = f"https://your-frontend-domain.com{reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})}"
+            reset_message = f"Please click on the link to reset your password: {reset_link}\n\n"
+            reset_message += "If you didn't request this password reset, please contact the system administrators as soon as possible."
 
-            # Send the password reset email
-            logger.info(f"Attempting to send password reset email to {email}")
 
             send_mail(
                 subject='Password Reset Request',
-                message=f"Please click on the link to reset your password: {reset_link}",
-                from_email='Rachel.for.Israel@gmail.com',  # should be replaced with no-reply email 
+                message= reset_message,
+                from_email='Rachel.for.Israel@gmail.com',
                 recipient_list=[email],
                 fail_silently=False,
             )
 
-          
             logger.info("Password reset email sent successfully")
+            return True
 
+        except ValidationError as e:
+            raise e
         except Exception as e:
             logger.error(f"Error in reset_password method: {e}")
-            raise Exception("An error occurred while processing your password reset request. Please try again later.")
+            raise ValidationError({"error": "An error occurred while processing your request. Please try again later."})
+
