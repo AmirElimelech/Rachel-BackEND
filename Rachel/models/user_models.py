@@ -4,11 +4,10 @@
 from datetime import date
 from django.db import  models
 from django_cryptography.fields import encrypt
-from django_countries.fields import CountryField
 from .support_models import SupportProviderRating
 from django.contrib.auth.models import User, Group
 from django.core.exceptions import  ValidationError
-from simple_history.models import HistoricalRecords
+from simple_history.models import  HistoricalRecords
 from django.utils.translation import  gettext_lazy  as _
 from .core_models import TimestampedModel , City, Country
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -53,7 +52,7 @@ class CommonUserProfile(TimestampedModel):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     identification_number = models.CharField(max_length=20, unique=True, blank=False, null=False, help_text=_("Enter your national identification number."))
     id_type = models.CharField(max_length=30, choices=ID_TYPE_CHOICES, blank=False, null=False, help_text=_("Type of identification (e.g., 'Israeli ID', 'Passport')."))
-    country_of_issue = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True)
+    country_of_issue = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True ,related_name='user_profiles_country_of_issue')
     languages_spoken = models.ManyToManyField('Language', blank=True)
     active_until = models.DateField(null=True, blank=True)
     address = encrypt(models.CharField(max_length=200, blank=True, null=True))
@@ -65,7 +64,7 @@ class CommonUserProfile(TimestampedModel):
             verbose_name=_("Profile Picture")
         )    
     city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True)
-    country = CountryField(blank_label='(select country)', blank=True)
+    country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True ,related_name='user_profiles_country')
     phone_number = models.CharField(max_length=20, blank=False, null=False)
     terms_accepted = models.BooleanField(default=False, verbose_name=_("Terms Accepted"))
 
@@ -117,7 +116,7 @@ def get_default_role_civilian():
 #Civilian model
 
 class Civilian(CommonUserProfile):
-    
+
     """
     Model representing civilian users in the application.
 
@@ -188,7 +187,7 @@ class SupportProvider(CommonUserProfile):
 
     role = models.ForeignKey("auth.Group", default=get_default_role_supportprovider, editable=False, on_delete=models.CASCADE)
     looking_to_earn = models.BooleanField(default=False, help_text=_("Indicates if the user is looking to earn through their services."))
-    support_provider_categories = models.ManyToManyField('SupportProviderCategory', blank=True, help_text=_("Categories of support provided."))
+    support_provider_categories = models.ManyToManyField('SupportProviderCategory', blank=False, help_text=_("Categories of support provided."))
     additional_info = models.TextField(blank=True, null=True, max_length=250, help_text=_("Additional details about the services offered."))
     kosher = models.BooleanField(default=False, help_text=_("Indicates if the provider offers Kosher services."))
     rating = models.IntegerField(
