@@ -30,7 +30,7 @@ class DAL:
 
         try:
             # Log the start of the retrieval operation
-            logger.info(f"Starting get_by_id operation for {model.__name__} with {field_name}={value}")
+            logger.info(f"Starting get_by_id operation for {model.__name__} with {field_name}={value}")   
 
             instance = model.objects.get(**{field_name: value})
 
@@ -45,6 +45,7 @@ class DAL:
         except Exception as e:
             # Log any unexpected exceptions
             logger.exception(f"get_by_id - Unexpected Error retrieving {model.__name__} with {field_name}={value}: {str(e)}")
+            
             return None
 
 

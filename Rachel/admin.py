@@ -18,7 +18,8 @@ from .models import (
     UserPreference,
     SearchHistory,
     UnauthorizedAccessAttempt,
-    ConfirmationCode
+    ConfirmationCode,
+    PasswordResetRequest,
 )
 from django.core.mail import EmailMessage
 from django.contrib.auth.models import User
@@ -108,16 +109,27 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ('recipient', 'title', 'message', 'read', 'notification_type')
     exclude = ('deleted_at',)
 
-
 @admin.register(Civilian)
 class CivilianAdmin(admin.ModelAdmin):
-    list_display = ('user', 'identification_number', 'id_type', 'country_of_issue', 'active_until', 'city', 'country', 'phone_number', 'terms_accepted')
+    list_display = ('user', 'identification_number', 'id_type', 'country_of_issue', 'city', 'country', 'phone_number', 'terms_accepted', 'is_active')
+
+    def is_active(self, obj):
+        return obj.user.is_active
+    is_active.boolean = True
+    is_active.short_description = 'active' 
+
     exclude = ('deleted_at',)
 
 
 @admin.register(SupportProvider)
 class SupportProviderAdmin(admin.ModelAdmin):
-    list_display = ('user', 'identification_number', 'id_type', 'country_of_issue', 'active_until', 'city', 'country', 'phone_number', 'terms_accepted')
+    list_display = ('user', 'identification_number', 'id_type', 'country_of_issue', 'active_until', 'city', 'country', 'phone_number', 'terms_accepted', 'is_active')
+
+    def is_active(self, obj):
+        return obj.user.is_active
+    is_active.boolean = True
+    is_active.short_description = 'active'
+
     exclude = ('deleted_at',)
 
 
@@ -166,3 +178,13 @@ class UnauthorizedAccessAttemptAdmin(admin.ModelAdmin):
 class ConfirmationCodeAdmin(admin.ModelAdmin):
     list_display = ('user', 'code', 'created_at', 'action_type')
     list_filter = ('user',)
+
+
+
+
+@admin.register(PasswordResetRequest)
+class PasswordResetRequestAdmin(admin.ModelAdmin):
+    list_display = ('user', 'timestamp', 'token_used', 'request_count')
+    search_fields = ('user__username', 'user__email')
+    list_filter = ('timestamp', 'token_used')
+    # readonly_fields = ('timestamp',) # uncomment this if i need to restrict playing with the datetime ! 
