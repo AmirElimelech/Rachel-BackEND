@@ -1,8 +1,9 @@
-import re
 import logging
 from .DAL import DAL
 from PIL import Image
 from io import BytesIO
+from datetime import timedelta
+from django.utils import timezone
 from axes.models import AccessAttempt
 from django.core.mail import send_mail
 from django.contrib.auth.models import Group
@@ -104,6 +105,7 @@ def alert_for_suspicious_activity(username, request=None):
 
 
 def clean_phone_number(country_id, phone_number):
+    
     """
     Validates and formats a phone number based on the country's phone code and ensures it has a specific length.
 
@@ -121,7 +123,6 @@ def clean_phone_number(country_id, phone_number):
     Raises:
     ValidationError: If any of the validations fail.
     """
-    
     
     country_instance = dal.get_by_id(Country, country_id)
 
@@ -153,6 +154,7 @@ def clean_phone_number(country_id, phone_number):
 
 
 def validate_image(image, max_size_mb=2, resize_target=None):
+
     """
     Validates and resizes an image file.
 
@@ -161,6 +163,7 @@ def validate_image(image, max_size_mb=2, resize_target=None):
     :param resize_target: tuple, target size (width, height) for resizing.
     :return: InMemoryUploadedFile, the processed image.
     """
+
     errors = {}
     allowed_extensions = [
         'jpg', 'jpeg', 'jfif', 'pjpeg', 'pjp',
@@ -189,6 +192,7 @@ def validate_image(image, max_size_mb=2, resize_target=None):
 
 
 def resize_image(image, resize_target):
+
     """
     Resizes an image to a target size. Assumes basic validation has been performed.
 
@@ -196,6 +200,7 @@ def resize_image(image, resize_target):
     :param resize_target: tuple, target size (width, height) for resizing.
     :return: InMemoryUploadedFile, the resized image.
     """
+    
     errors = {}
 
     if not image or not isinstance(image, InMemoryUploadedFile):
@@ -247,19 +252,6 @@ def request_password_reset(user, request):
         reset_request.request_count += 1
         dal.update(reset_request, request_count=reset_request.request_count)
 
-    # Send the password reset email with the token
-    send_mail(
-        'Password Reset Request',
-        f'Your password reset token is {token}.',
-        'Rachel.for.Israel@gmail.com',
-        [user.email],
-        fail_silently=False,
-    )
-
-    # Log the sending of the email
-    
-    logger.info(f"Password reset email sent to {user.email}")
-
 
     # Get the user's IP address from the request object
     user_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
@@ -271,7 +263,11 @@ def request_password_reset(user, request):
     return token
 
 
+
+
+
 def can_request_password_reset(user):
+
     """
     Checks if the user can request a password reset.
 
@@ -281,13 +277,18 @@ def can_request_password_reset(user):
     Returns:
         bool: True if the user can request a password reset, False otherwise.
     """
+
     MAX_ATTEMPTS = 5  # Maximum number of attempts allowed
     try:
         reset_request = dal.get_by_field(PasswordResetRequest, user=user)
 
         if reset_request:
-            can_reset = reset_request.request_count < MAX_ATTEMPTS and not reset_request.token_used
-            logger.info(f"Password reset check for user {user.username}: Request count - {reset_request.request_count}, Can reset - {can_reset}")
+            
+            can_reset = (
+                reset_request.request_count < MAX_ATTEMPTS and 
+                not reset_request.token_used 
+            )
+            logger.info(f"Can reset: {can_reset}, Request count: {reset_request.request_count}")
             return can_reset
         else:
             logger.info(f"No existing password reset request for user {user.username}. User can request password reset.")
@@ -299,19 +300,43 @@ def can_request_password_reset(user):
 
 
 
+def delete_outdated_password_reset_requests():
 
+    """
+    Deletes PasswordResetRequest records that are older than 24 hours
+    and have reached the maximum number of attempts.
+    """
+
+    MAX_ATTEMPTS = 5
+    time_threshold = timezone.now() - timedelta(hours=24)
+
+    outdated_requests = dal.filter(
+        PasswordResetRequest,
+        timestamp__lt=time_threshold,
+        request_count__gte=MAX_ATTEMPTS
+    )
+    
+    count = outdated_requests.count()
+    outdated_requests.delete()
+    logger.info(f"Deleted {count} outdated password reset requests.")
+
+
+
+ 
 def finalize_password_reset(user, token, request_data):
+
     """
     Finalizes the password reset process for a given user.
 
     Args:
-        user: User instance resetting their password.
+        user: User instance resetting their password. 
         token: The token received for password reset.
         request_data: POST data from the request, containing the new password.
 
     Raises:
         ValidationError: If the token is invalid or has already been used.
     """
+
     try:
         # Retrieve the password reset request record
         reset_request = dal.get_by_field(PasswordResetRequest, user=user, token=token)
