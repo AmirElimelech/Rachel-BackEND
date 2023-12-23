@@ -24,6 +24,8 @@ class CitySerializer(serializers.ModelSerializer):
     class Meta:
         model = City
         fields = ['id', 'name', 'country', 'population']
+        depth = 1  # To include country details in the city response
+
 
 class LanguageSerializer(serializers.ModelSerializer):
     class Meta:
