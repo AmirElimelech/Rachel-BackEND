@@ -66,20 +66,19 @@ class DAL:
         """
 
         try:
-            # Log the start of the retrieval operation
             logger.info(f"Starting get_all operation for {model.__name__}")
 
-            result = model.objects.filter(deleted_at__isnull=True)
+            # Check if the model has 'deleted_at' field
+            if 'deleted_at' in [field.name for field in model._meta.get_fields()]:
+                result = model.objects.filter(deleted_at__isnull=True)
+            else:
+                result = model.objects.all()
 
-            # Log the successful retrieval of records
             logger.info(f"get_all operation completed for {model.__name__}. Number of records found: {len(result)}")
-
             return result
         except Exception as e:
-            # Log any error encountered during retrieval
             logger.error(f"get_all - Error during retrieval for {model.__name__}: {str(e)}")
             return model.objects.none()
-
         
 
     
