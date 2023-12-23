@@ -1,14 +1,15 @@
 import logging
 import traceback
+from Rachel.DAL import DAL
 from rest_framework import status
 from django.db import IntegrityError
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.core.exceptions import ValidationError
-from Rachel.models import Civilian, SupportProvider
 from Facades.anonymous_facade import AnonymousFacade
+from Rachel.models import Civilian, SupportProvider, City, Country
 from rest_framework.decorators import api_view , permission_classes
-from Api.serializers import UserSerializer, CivilianProfileSerializer, SupportProviderProfileSerializer
+from Api.serializers import UserSerializer, CivilianProfileSerializer, SupportProviderProfileSerializer, CountrySerializer,CitySerializer
 
 logger = logging.getLogger(__name__)
 
@@ -204,3 +205,62 @@ def reset_password_api(request):
         logger.error(f"Unexpected error in password reset: {e}")
         return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def country_list_api(request):
+
+    """
+    API endpoint for retrieving a list of countries.
+
+    Returns:
+        Response: A Response object containing a list of countries.
+    """
+
+    logger.info("Processing country list request")
+    try:
+        countries = DAL().get_all(Country)
+        serializer = CountrySerializer(countries, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Unexpected error during country list retrieval: {e}")
+        return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def city_list_api(request):
+
+    """
+    API endpoint for retrieving a list of cities. Filters cities by country.
+
+    Query Parameters:
+        country_id: The ID of the country to filter cities.
+
+    Returns:
+        Response: A Response object containing a list of cities or an error message.
+    """
+
+    logger.info("Processing city list request")
+    try:
+        country_id = request.query_params.get('country_id')
+        if not country_id:
+            return Response({"error": "A country_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if the country exists
+        country_exists = DAL().get_by_id(Country, country_id)
+        if not country_exists:
+            return Response({"error": "No such country exists"}, status=status.HTTP_404_NOT_FOUND)
+
+        cities = DAL().filter(City, country_id=country_id)
+        if not cities:
+            return Response({"message": "No cities found for the specified country"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = CitySerializer(cities, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Unexpected error during city list retrieval: {e}")
+        return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
