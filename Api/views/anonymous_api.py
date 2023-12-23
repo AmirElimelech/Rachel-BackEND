@@ -7,9 +7,10 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.core.exceptions import ValidationError
 from Facades.anonymous_facade import AnonymousFacade
-from Rachel.models import Civilian, SupportProvider, City, Country
 from rest_framework.decorators import api_view , permission_classes
-from Api.serializers import UserSerializer, CivilianProfileSerializer, SupportProviderProfileSerializer, CountrySerializer,CitySerializer
+from Rachel.models import Civilian, SupportProvider, City, Country, SupportProviderCategory, Intentions, Language
+from Api.serializers import ( UserSerializer, CivilianProfileSerializer, SupportProviderProfileSerializer, CountrySerializer, 
+                                    CitySerializer, LanguageSerializer, IntentionsSerializer, SupportProviderCategorySerializer)
 
 logger = logging.getLogger(__name__)
 
@@ -263,4 +264,60 @@ def city_list_api(request):
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Unexpected error during city list retrieval: {e}")
+        return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def language_list_api(request):
+
+    """
+    API endpoint for retrieving a list of languages.
+    """
+
+    logger.info("Processing language list request")
+    try:
+        languages = DAL().get_all(Language)
+        serializer = LanguageSerializer(languages, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Unexpected error during language list retrieval: {e}")
+        return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def intentions_list_api(request):
+
+    """
+    API endpoint for retrieving a list of intentions.
+    """
+
+    logger.info("Processing intentions list request")
+    try:
+        intentions = DAL().get_all(Intentions)
+        serializer = IntentionsSerializer(intentions, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Unexpected error during intentions list retrieval: {e}")
+        return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def categories_list_api(request):
+
+    """
+    API endpoint for retrieving a list of support provider categories.
+    """
+
+    logger.info("Processing categories list request")
+    try:
+        categories = DAL().get_all(SupportProviderCategory)
+        serializer = SupportProviderCategorySerializer(categories, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Unexpected error during categories list retrieval: {e}")
         return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
