@@ -16,52 +16,52 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 
-#Intentions Model
-class Intentions(models.Model):
+# #Intentions Model
+# class Intentions(models.Model):
 
-    """
-    Model representing various intentions or reasons for seeking assistance.
-    Examples include seeking shelter, job opportunities, medical assistance, etc.
-    This model allows users to select multiple intentions from predefined choices.
-    Fields:
-    - intentions: A ManyToManyField to associate multiple intentions using predefined choices.
-    """
+#     """
+#     Model representing various intentions or reasons for seeking assistance.
+#     Examples include seeking shelter, job opportunities, medical assistance, etc.
+#     This model allows users to select multiple intentions from predefined choices.
+#     Fields:
+#     - intentions: A ManyToManyField to associate multiple intentions using predefined choices.
+#     """
 
-    INTENTION_CHOICES = [
-        ('shelter', _('Seeking Shelter')),
-        ('job', _('Looking for Job Opportunities')),
-        ('medical', _('Medical Assistance')),
-        ('education', _('Educational Support')),
-        ('food', _('Food and Nutrition')),
-        ('legal_aid', _('Legal Aid')),
-        ('emotional_support', _('Emotional Support')),
-        ('transportation', _('Transportation Assistance')),
-        ('financial_help', _('Financial Help')),
-        ('community_engagement', _('Community Engagement')),
-        ('language_learning', _('Language Learning Support')),
-        ('technology', _('Technology Assistance')),
-        ('childcare', _('Childcare Services')),
-        ('elderly_care', _('Elderly Care')),
-        ('mental_health', _('Mental Health Support')),
-        ('environmental_activism', _('Environmental Activism')),
-        ('artistic_expression', _('Artistic Expression')),
-        ('sports_recreation', _('Sports and Recreation')),
-        ('volunteer_opportunities', _('Volunteer Opportunities')),
-        ('skill_development', _('Skill Development')),
-        # i can add more here if needed 
-    ]
+#     INTENTION_CHOICES = [
+#         ('shelter', _('Seeking Shelter')),
+#         ('job', _('Looking for Job Opportunities')),
+#         ('medical', _('Medical Assistance')),
+#         ('education', _('Educational Support')),
+#         ('food', _('Food and Nutrition')),
+#         ('legal_aid', _('Legal Aid')),
+#         ('emotional_support', _('Emotional Support')),
+#         ('transportation', _('Transportation Assistance')),
+#         ('financial_help', _('Financial Help')),
+#         ('community_engagement', _('Community Engagement')),
+#         ('language_learning', _('Language Learning Support')),
+#         ('technology', _('Technology Assistance')),
+#         ('childcare', _('Childcare Services')),
+#         ('elderly_care', _('Elderly Care')),
+#         ('mental_health', _('Mental Health Support')),
+#         ('environmental_activism', _('Environmental Activism')),
+#         ('artistic_expression', _('Artistic Expression')),
+#         ('sports_recreation', _('Sports and Recreation')),
+#         ('volunteer_opportunities', _('Volunteer Opportunities')),
+#         ('skill_development', _('Skill Development')),
+#         # i can add more here if needed 
+#     ]
 
-    # Use a ManyToManyField with choices
-    name = models.CharField(max_length=100, choices=INTENTION_CHOICES, unique=True)
-    history = HistoricalRecords()
+#     # Use a ManyToManyField with choices
+#     name = models.CharField(max_length=100, choices=INTENTION_CHOICES, unique=True)
+#     history = HistoricalRecords()
 
-    def __str__(self):
-        return self.get_name_display()
+#     def __str__(self):
+#         return self.get_name_display()
     
 
-    class Meta:
-        verbose_name = _("Intentions")
-        verbose_name_plural = _("Intentions")
+#     class Meta:
+#         verbose_name = _("Intentions")
+#         verbose_name_plural = _("Intentions")
 
 
 
