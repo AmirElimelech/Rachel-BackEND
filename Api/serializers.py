@@ -98,10 +98,16 @@ class PasswordResetRequestSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+
 class IntentionsSerializer(serializers.ModelSerializer):
+    human_readable_name = serializers.CharField(source='get_name_display')
+
     class Meta:
         model = Intentions
-        fields = '__all__'
+        fields = ['id', 'name', 'human_readable_name']
+
+
+
 
 class SupportProviderCategorySerializer(serializers.ModelSerializer):
     class Meta:
