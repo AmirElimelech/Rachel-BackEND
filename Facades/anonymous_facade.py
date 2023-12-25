@@ -146,6 +146,7 @@ class AnonymousFacade:
 
 
     def login_user(self, request, username, password):
+
         """
         Authenticates and logs in a user.
 
@@ -160,7 +161,6 @@ class AnonymousFacade:
         Raises:
             ValidationError: If the authentication fails.
         """
-
         
         user = self.dal.get_by_field(User, username=username)
 
@@ -185,7 +185,7 @@ class AnonymousFacade:
             logger.info(f"User {username} logged in successfully")
             self.dal.create(UserActivity, user=authenticated_user, activity_type='login', ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'))
 
-            return token.key
+            return token.key , user
         else:
             if user:
                 self.dal.create(UserActivity, user=user, activity_type='login_failed', ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'))

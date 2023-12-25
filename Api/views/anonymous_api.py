@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user_api(request):
+
     """
     API endpoint for user registration.
 
@@ -36,6 +37,7 @@ def register_user_api(request):
         Response: A Response object containing the serialized user data if registration is successful,
                   otherwise an error message with appropriate status code.
     """
+
     logger.info("Processing user registration request")
 
     user_type = request.data.get('user_type')
@@ -110,10 +112,11 @@ def login_user_api(request):
     logger.info("Processing user login request")
     try:
         facade = AnonymousFacade()
-        token_key = facade.login_user(request, request.data.get('username'), request.data.get('password'))
+        token_key, user  = facade.login_user(request, request.data.get('username'), request.data.get('password'))
         if token_key:
             logger.info("User login successful")
-            return Response({'token': token_key}, status=status.HTTP_200_OK)
+            user_username = user.username
+            return Response({'token': token_key, 'username': user_username}, status=status.HTTP_200_OK)
         else:
             logger.warning("Invalid login credentials")
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -169,42 +172,63 @@ def contact_us_api(request):
 
 
 
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# def reset_password_api(request):
+
+#     """
+#     API endpoint for password reset requests.
+
+#     This endpoint processes password reset requests. It expects the 'email' of the user
+#     who wants to reset their password in the request body.
+
+#     Args:
+#         request: The HTTP request object containing the user's email.
+
+#     Returns:
+#         Response: A Response object indicating whether the password reset email was sent successfully
+#                   or if there was a failure, along with an appropriate status code.
+#     """
+    
+#     logger.info("Processing password reset request")
+#     try:
+#         facade = AnonymousFacade()
+#         success = facade.reset_password(request, request.data.get('email'))
+#         if success:
+#             logger.info("Password reset email sent successfully")
+#             return Response({"message": "If the email is registered, a password reset link has been sent."}, status=status.HTTP_200_OK)
+#     except ValidationError as e:
+#         if hasattr(e, 'message_dict'):
+#             # If the errors have a dictionary structure
+#             formatted_errors = {field: e.message_dict[field] for field in e.message_dict}
+#             return Response({"errors": formatted_errors}, status=status.HTTP_400_BAD_REQUEST)
+#         else:
+#             # Single message or list of messages
+#             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+#     except Exception as e:
+#         logger.error(f"Unexpected error in password reset: {e}")
+#         return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def reset_password_api(request):
-
-    """
-    API endpoint for password reset requests.
-
-    This endpoint processes password reset requests. It expects the 'email' of the user
-    who wants to reset their password in the request body.
-
-    Args:
-        request: The HTTP request object containing the user's email.
-
-    Returns:
-        Response: A Response object indicating whether the password reset email was sent successfully
-                  or if there was a failure, along with an appropriate status code.
-    """
-    
     logger.info("Processing password reset request")
     try:
         facade = AnonymousFacade()
-        success = facade.reset_password(request, request.data.get('email'))
-        if success:
-            logger.info("Password reset email sent successfully")
-            return Response({"message": "Password reset email sent successfully"}, status=status.HTTP_200_OK)
+        # Attempt to reset password (irrespective of whether email exists)
+        facade.reset_password(request, request.data.get('email'))
+        # Always return a successful response
+        return Response({"message": "If the email is registered, a password reset link will be been sent."}, status=status.HTTP_200_OK)
     except ValidationError as e:
-        if hasattr(e, 'message_dict'):
-            # If the errors have a dictionary structure
-            formatted_errors = {field: e.message_dict[field] for field in e.message_dict}
-            return Response({"errors": formatted_errors}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            # Single message or list of messages
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # Log validation error but still return a generic successful response
+        logger.warning(f"Validation error in password reset: {e}")
+        return Response({"message": "If the email is registered, a password reset link will be been sent."}, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Unexpected error in password reset: {e}")
-        return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # For other errors, you can still choose to return a generic response
+        return Response({"message": "If the email is registered, a password reset link will be been sent."}, status=status.HTTP_200_OK)
+
 
 
 
