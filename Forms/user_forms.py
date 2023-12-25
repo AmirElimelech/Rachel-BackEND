@@ -19,7 +19,7 @@ class CivilianRegisterForm(UserCreationForm):
 
     identification_number = forms.CharField(max_length=20, required=True)
     id_type = forms.ChoiceField(choices=Civilian.ID_TYPE_CHOICES, required=True)
-    country_of_issue = forms.ModelChoiceField(queryset=Country.objects.all(), required=True)
+    country_of_issue = forms.ModelChoiceField(queryset=Country.objects.all(), required=False)
     languages_spoken = forms.ModelMultipleChoiceField(queryset=Language.objects.all(), required=False)
     city = forms.ModelChoiceField(queryset=City.objects.all(), required=False)
     country = forms.ModelChoiceField(queryset=Country.objects.all(), required=True)
@@ -54,7 +54,7 @@ class CivilianRegisterForm(UserCreationForm):
     
 
     def clean_phone_number(self):
-        country = self.cleaned_data.get('country_of_issue')
+        country = self.cleaned_data.get('country')
         phone_number = self.cleaned_data.get('phone_number')
         if not phone_number:
             raise forms.ValidationError("Phone number is required.")
@@ -126,31 +126,29 @@ class CivilianRegisterForm(UserCreationForm):
     def clean(self):
         cleaned_data = super().clean()
 
-
         # Mismatched passwords check
         password1 = cleaned_data.get("password1")
         password2 = cleaned_data.get("password2")
         if password1 and password2 and password1 != password2:
             self.add_error('password2', forms.ValidationError("The two password fields didn’t match.", code='password_mismatch')) 
 
-        # Interdependent field validation
+        # Interdependent field validation for country_of_issue
+        id_type = cleaned_data.get('id_type')
         country_of_issue = cleaned_data.get('country_of_issue')
+        if id_type == 'other' and not country_of_issue:
+            self.add_error('country_of_issue', forms.ValidationError('Country of issue is required for Other Identification type.', code='required'))
+
+        # Phone number validation
         phone_number = cleaned_data.get('phone_number')
-        if phone_number and not country_of_issue:
-            self.add_error('country_of_issue', forms.ValidationError('Country of issue is required when a phone number is provided.', code='phone_country_required'))
-        elif country_of_issue and not phone_number:
-            self.add_error('phone_number', forms.ValidationError('Phone number is required when a country of issue is provided.', code='phone_required'))
+        if not phone_number:
+            self.add_error('phone_number', forms.ValidationError('Phone number is required.', code='phone_required'))
 
-
-            # New validation for city and country match
+        # New validation for city and country match
         city_instance = cleaned_data.get('city')
         country_instance = cleaned_data.get('country')
         
         if city_instance and country_instance and city_instance.country != country_instance:
             self.add_error('city', forms.ValidationError("The selected city does not belong to the chosen country.", code='city_country_mismatch'))
-
-
-
 
         return cleaned_data
 
